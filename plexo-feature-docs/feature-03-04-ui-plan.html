@@ -1,0 +1,1884 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Plexo UI Plan: Feature 3 Translucent Refresh and Feature 4 Network Speed Test</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            /* ============================================================
+               This document is a PLAN and MOCKUP, not the app.
+               Proposed tokens live here as CSS variables so the palette,
+               corners and glass levels can be reviewed before any code.
+               ============================================================ */
+
+            * {
+                box-sizing: border-box;
+            }
+
+            :root {
+                /* Proposed dark theme (main mockup theme) */
+                --bg-solid: #0c1015;
+                --bg-strong-solid: #12181f;
+                --glass: rgba(12, 16, 21, 0.72);
+                --glass-strong: rgba(19, 25, 32, 0.88);
+                --panel: rgba(24, 31, 40, 0.66);
+                --panel-solid: #161d26;
+                --row-hover: rgba(255, 255, 255, 0.04);
+
+                --text: #e7edf3;
+                --text-2: #a6b0ba;
+                --text-3: #7f8a94;
+
+                --hairline: rgba(255, 255, 255, 0.09);
+                --hairline-strong: rgba(255, 255, 255, 0.2);
+
+                --signal: #35c7f5;
+                --signal-hover: #6bd8fa;
+                --signal-ink: #052230;
+                --signal-soft: rgba(53, 199, 245, 0.14);
+
+                --good: #3ddc97;
+                --warn: #f5c451;
+                --bad: #ff7a7a;
+
+                --ok-chip: rgba(61, 220, 151, 0.14);
+                --warn-chip: rgba(245, 196, 81, 0.14);
+                --bad-chip: rgba(255, 122, 122, 0.14);
+
+                --net-steel: #8fa7d6;
+                --net-teal: #57c9b5;
+                --net-amber: #e0b25c;
+
+                --mono: 'Roboto Mono', 'SF Mono', ui-monospace, Menlo, monospace;
+                --sans: 'Manrope', -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+
+                /* Sharp corners everywhere. The switch knob stays a circle
+                   because it is a knob, not a corner. */
+                --radius: 0px;
+            }
+
+            html,
+            body {
+                margin: 0;
+                background: #0a0d11;
+                color: var(--text);
+                font-family: var(--sans);
+                font-size: 15px;
+                line-height: 1.55;
+            }
+
+            .doc {
+                max-width: 1080px;
+                margin: 0 auto;
+                padding: 40px 28px 90px;
+            }
+
+            .doc-head {
+                border-bottom: 2px solid var(--hairline-strong);
+                padding-bottom: 20px;
+                margin-bottom: 26px;
+            }
+
+            .doc-head .kicker {
+                font-family: var(--mono);
+                font-size: 12px;
+                letter-spacing: 0.12em;
+                text-transform: uppercase;
+                color: var(--signal);
+            }
+
+            .doc-head h1 {
+                font-size: 32px;
+                line-height: 1.2;
+                margin: 10px 0 8px;
+            }
+
+            .doc-head .sub {
+                color: var(--text-2);
+                max-width: 780px;
+            }
+
+            .doc-head .meta {
+                font-family: var(--mono);
+                font-size: 12px;
+                color: var(--text-3);
+                margin-top: 14px;
+            }
+
+            section.board {
+                border: 1px solid var(--hairline);
+                background: rgba(255, 255, 255, 0.02);
+                padding: 22px 24px 26px;
+                margin: 26px 0;
+            }
+
+            section.board > h2 {
+                font-size: 21px;
+                margin: 0 0 4px;
+            }
+
+            section.board > h2 .tag {
+                font-family: var(--mono);
+                font-size: 12px;
+                color: var(--signal);
+                vertical-align: middle;
+                margin-right: 8px;
+            }
+
+            section.board > p.lead {
+                color: var(--text-2);
+                margin: 0 0 18px;
+                max-width: 860px;
+            }
+
+            h3 {
+                font-size: 16px;
+                margin: 26px 0 8px;
+            }
+
+            p,
+            li {
+                color: var(--text-2);
+            }
+
+            p strong,
+            li strong {
+                color: var(--text);
+            }
+
+            code {
+                font-family: var(--mono);
+                font-size: 12.5px;
+                background: rgba(255, 255, 255, 0.06);
+                border: 1px solid var(--hairline);
+                padding: 1px 5px;
+            }
+
+            table.spec {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 13.5px;
+                margin: 12px 0;
+            }
+
+            table.spec th,
+            table.spec td {
+                border: 1px solid var(--hairline);
+                padding: 7px 9px;
+                text-align: left;
+                vertical-align: top;
+                color: var(--text-2);
+            }
+
+            table.spec th {
+                background: rgba(255, 255, 255, 0.05);
+                color: var(--text);
+                font-weight: 600;
+            }
+
+            table.spec td strong {
+                color: var(--text);
+            }
+
+            .mono {
+                font-family: var(--mono);
+            }
+
+            .note {
+                border: 1px solid var(--hairline);
+                border-left: 3px solid var(--signal);
+                background: var(--signal-soft);
+                padding: 10px 14px;
+                font-size: 13.5px;
+                color: var(--text-2);
+            }
+
+            .chip {
+                display: inline-block;
+                font-family: var(--mono);
+                font-size: 11px;
+                padding: 2px 7px;
+                border: 1px solid var(--hairline-strong);
+                color: var(--text-2);
+                vertical-align: middle;
+            }
+
+            .chip.good {
+                color: var(--good);
+                border-color: var(--good);
+                background: var(--ok-chip);
+            }
+
+            .chip.warn {
+                color: var(--warn);
+                border-color: var(--warn);
+                background: var(--warn-chip);
+            }
+
+            .chip.bad {
+                color: var(--bad);
+                border-color: var(--bad);
+                background: var(--bad-chip);
+            }
+
+            .chip.now {
+                color: var(--signal);
+                border-color: var(--signal);
+                background: var(--signal-soft);
+            }
+
+            /* ------------------------------------------------------------
+               Buttons, in the proposed style: sharp corners, hairline
+               borders, one signal color.
+               ------------------------------------------------------------ */
+
+            .btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                font-family: var(--sans);
+                font-size: 13.5px;
+                font-weight: 600;
+                padding: 7px 14px;
+                border-radius: var(--radius);
+                border: 1px solid var(--hairline-strong);
+                background: transparent;
+                color: var(--text);
+                cursor: default;
+                user-select: none;
+            }
+
+            .btn.primary {
+                background: var(--signal);
+                border-color: var(--signal);
+                color: var(--signal-ink);
+            }
+
+            .btn.primary:hover {
+                background: var(--signal-hover);
+                border-color: var(--signal-hover);
+            }
+
+            .btn.ghost {
+                border-color: transparent;
+                color: var(--text-2);
+            }
+
+            .btn.danger {
+                color: var(--bad);
+                border-color: rgba(255, 122, 122, 0.5);
+            }
+
+            .btn.small {
+                font-size: 12px;
+                padding: 4px 10px;
+            }
+
+            /* ------------------------------------------------------------
+               The fake app window used across all mockups.
+               data-material="solid"    today's look, opaque backgrounds
+               data-material="panels"   glass panels over an app backdrop
+               data-material="desktop"  whole window translucent
+               ------------------------------------------------------------ */
+
+            .desk {
+                position: relative;
+                padding: 34px 30px;
+                background:
+                    radial-gradient(640px 320px at 12% 8%, rgba(53, 199, 245, 0.16), transparent 60%),
+                    radial-gradient(560px 360px at 88% 90%, rgba(120, 92, 255, 0.14), transparent 62%),
+                    radial-gradient(420px 280px at 70% 20%, rgba(61, 220, 151, 0.08), transparent 60%),
+                    linear-gradient(160deg, #151a22 0%, #0d1117 55%, #121820 100%);
+                border: 1px solid var(--hairline);
+            }
+
+            .desk::before {
+                content: '';
+                position: absolute;
+                inset: 0;
+                background-image:
+                    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+                background-size: 34px 34px;
+                pointer-events: none;
+            }
+
+            .win {
+                border: 1px solid var(--hairline-strong);
+                border-radius: var(--radius);
+                overflow: hidden;
+                background: var(--bg-solid);
+                box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+            }
+
+            .win-title {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                height: 44px;
+                padding: 0 14px;
+                font-size: 13px;
+                font-weight: 600;
+                border-bottom: 1px solid var(--hairline);
+                background: var(--bg-strong-solid);
+            }
+
+            .win-title .dot {
+                width: 8px;
+                height: 8px;
+                background: var(--signal);
+            }
+
+            .win-title .spacer {
+                flex: 1;
+            }
+
+            .win-controls {
+                display: flex;
+                align-items: center;
+                gap: 14px;
+            }
+
+            .win-controls i {
+                display: block;
+                width: 11px;
+                height: 11px;
+                position: relative;
+                opacity: 0.7;
+            }
+
+            .win-controls i.min::before {
+                content: '';
+                position: absolute;
+                left: 0;
+                right: 0;
+                top: 5px;
+                height: 1px;
+                background: var(--text);
+            }
+
+            .win-controls i.max {
+                border: 1px solid var(--text);
+            }
+
+            .win-controls i.close::before,
+            .win-controls i.close::after {
+                content: '';
+                position: absolute;
+                left: 5px;
+                top: 0;
+                width: 1px;
+                height: 11px;
+                background: var(--text);
+            }
+
+            .win-controls i.close::before {
+                transform: rotate(45deg);
+            }
+
+            .win-controls i.close::after {
+                transform: rotate(-45deg);
+            }
+
+            .win-body {
+                position: relative;
+                display: flex;
+                flex-direction: column;
+            }
+
+            /* Glass levels. With "panels" the window canvas stays opaque and
+               cards, dialogs and the title strip float on the app's own
+               backdrop. With "desktop" the whole canvas turns translucent
+               and the wallpaper shows through (real app: vibrancy /
+               backgroundMaterial / compositor transparency). */
+
+            .win[data-material='solid'] .glass-panel {
+                background: var(--panel-solid);
+                backdrop-filter: none;
+            }
+
+            .win[data-material='panels'] .win-body {
+                background:
+                    radial-gradient(480px 240px at 80% 0%, rgba(53, 199, 245, 0.1), transparent 60%),
+                    var(--bg-solid);
+            }
+
+            .win[data-material='panels'] .glass-panel {
+                background: var(--panel);
+                backdrop-filter: blur(22px) saturate(140%);
+            }
+
+            .win[data-material='desktop'] .win-title {
+                background: var(--glass-strong);
+                backdrop-filter: blur(28px) saturate(150%);
+            }
+
+            .win[data-material='desktop'] .win-body {
+                background: var(--glass);
+                backdrop-filter: blur(28px) saturate(150%);
+            }
+
+            .win[data-material='desktop'] .glass-panel {
+                background: rgba(24, 31, 40, 0.55);
+                backdrop-filter: blur(20px) saturate(140%);
+            }
+
+            .win[data-material='solid'] {
+                box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+            }
+
+            .win[data-material='desktop'] {
+                box-shadow: 0 34px 90px rgba(0, 0, 0, 0.75);
+            }
+
+            /* ------------------------------------------------------------
+               Mock app internals
+               ------------------------------------------------------------ */
+
+            .toolbar {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--hairline);
+            }
+
+            .toolbar .grow {
+                flex: 1;
+            }
+
+            .dl-row {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 12px 14px;
+                border-bottom: 1px solid var(--hairline);
+            }
+
+            .dl-row:hover {
+                background: var(--row-hover);
+            }
+
+            .dl-name {
+                font-size: 13.5px;
+                font-weight: 600;
+                color: var(--text);
+            }
+
+            .dl-sub {
+                font-family: var(--mono);
+                font-size: 11.5px;
+                color: var(--text-3);
+                margin-top: 2px;
+            }
+
+            .bar {
+                height: 6px;
+                background: rgba(255, 255, 255, 0.08);
+                border-radius: var(--radius);
+                overflow: hidden;
+            }
+
+            .bar > i {
+                display: block;
+                height: 100%;
+                background: var(--signal);
+            }
+
+            .bar.warn > i {
+                background: var(--warn);
+            }
+
+            .bar.good > i {
+                background: var(--good);
+            }
+
+            .num {
+                font-family: var(--mono);
+                font-variant-numeric: tabular-nums;
+                color: var(--text);
+            }
+
+            .muted {
+                color: var(--text-3);
+            }
+
+            .field {
+                display: block;
+                width: 100%;
+                background: rgba(0, 0, 0, 0.25);
+                border: 1px solid var(--hairline-strong);
+                border-radius: var(--radius);
+                color: var(--text);
+                font-family: var(--mono);
+                font-size: 12.5px;
+                padding: 8px 10px;
+                outline: none;
+            }
+
+            .field:focus,
+            .field.focus-demo {
+                border-color: var(--signal);
+                box-shadow: inset 0 0 0 1px var(--signal);
+            }
+
+            .check {
+                display: inline-block;
+                width: 14px;
+                height: 14px;
+                border: 1px solid var(--hairline-strong);
+                border-radius: var(--radius);
+                vertical-align: -2px;
+                position: relative;
+                background: rgba(0, 0, 0, 0.2);
+            }
+
+            .check.on {
+                background: var(--signal);
+                border-color: var(--signal);
+            }
+
+            .check.on::after {
+                content: '';
+                position: absolute;
+                left: 3px;
+                top: 1px;
+                width: 5px;
+                height: 8px;
+                border-right: 2px solid var(--signal-ink);
+                border-bottom: 2px solid var(--signal-ink);
+                transform: rotate(40deg);
+            }
+
+            .switch {
+                display: inline-block;
+                width: 34px;
+                height: 18px;
+                border: 1px solid var(--hairline-strong);
+                border-radius: var(--radius);
+                background: rgba(0, 0, 0, 0.25);
+                position: relative;
+                vertical-align: -3px;
+            }
+
+            .switch > i {
+                position: absolute;
+                top: 1px;
+                left: 1px;
+                width: 14px;
+                height: 14px;
+                border-radius: 50%;
+                background: var(--text-3);
+            }
+
+            .switch.on {
+                background: var(--signal-soft);
+                border-color: var(--signal);
+            }
+
+            .switch.on > i {
+                left: auto;
+                right: 1px;
+                background: var(--signal);
+            }
+
+            .radio {
+                display: inline-block;
+                width: 13px;
+                height: 13px;
+                border: 1px solid var(--hairline-strong);
+                border-radius: 50%;
+                vertical-align: -2px;
+                position: relative;
+            }
+
+            .radio.on {
+                border-color: var(--signal);
+            }
+
+            .radio.on::after {
+                content: '';
+                position: absolute;
+                inset: 3px;
+                border-radius: 50%;
+                background: var(--signal);
+            }
+
+            /* ------------------------------------------------------------
+               Corner comparison
+               ------------------------------------------------------------ */
+
+            .corner-grid {
+                display: flex;
+                gap: 16px;
+                flex-wrap: wrap;
+                margin: 10px 0 4px;
+            }
+
+            .corner-card {
+                flex: 1;
+                min-width: 200px;
+                border: 1px solid var(--hairline-strong);
+                background: var(--panel-solid);
+                padding: 16px;
+            }
+
+            .corner-card .sample {
+                height: 54px;
+                border: 1px solid var(--hairline-strong);
+                background: rgba(255, 255, 255, 0.05);
+                margin-bottom: 10px;
+            }
+
+            .corner-card .cap {
+                font-family: var(--mono);
+                font-size: 12px;
+                color: var(--text-2);
+            }
+
+            .corner-card.pick {
+                border-color: var(--signal);
+                box-shadow: inset 0 0 0 1px var(--signal);
+            }
+
+            .corner-card.pick .cap {
+                color: var(--signal);
+            }
+
+            /* ------------------------------------------------------------
+               Swatches
+               ------------------------------------------------------------ */
+
+            .swatches {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+                gap: 10px;
+                margin: 12px 0;
+            }
+
+            .swatch {
+                border: 1px solid var(--hairline);
+            }
+
+            .swatch .paint {
+                height: 46px;
+            }
+
+            .swatch .info {
+                padding: 7px 9px;
+                font-family: var(--mono);
+                font-size: 11.5px;
+                color: var(--text-2);
+                background: rgba(0, 0, 0, 0.25);
+            }
+
+            .swatch .info b {
+                display: block;
+                color: var(--text);
+                font-family: var(--sans);
+                font-size: 12.5px;
+                font-weight: 600;
+            }
+
+            .board-light {
+                background: #f2f5f8;
+                border: 1px solid var(--hairline);
+                padding: 16px;
+                color: #0f151b;
+            }
+
+            .board-light .swatch {
+                border-color: rgba(15, 21, 27, 0.15);
+            }
+
+            .board-light .swatch .info {
+                background: rgba(15, 21, 27, 0.06);
+                color: #4c5866;
+            }
+
+            .board-light .swatch .info b {
+                color: #0f151b;
+            }
+
+            /* ------------------------------------------------------------
+               Speed test dialog mockup
+               ------------------------------------------------------------ */
+
+            .dialog {
+                max-width: 620px;
+                margin: 0 auto;
+            }
+
+            .dialog-head {
+                padding: 14px 16px 0;
+            }
+
+            .dialog-head h3 {
+                margin: 0;
+                font-size: 16px;
+                color: var(--text);
+            }
+
+            .dialog-head .sub {
+                font-size: 12.5px;
+                color: var(--text-3);
+                margin-top: 3px;
+            }
+
+            .dialog-tabs {
+                display: flex;
+                gap: 0;
+                margin: 12px 16px 0;
+                border-bottom: 1px solid var(--hairline);
+            }
+
+            .tab {
+                font-family: var(--mono);
+                font-size: 12px;
+                color: var(--text-3);
+                padding: 8px 12px;
+                border: 1px solid transparent;
+                border-bottom: none;
+                margin-bottom: -1px;
+            }
+
+            .tab.on {
+                color: var(--text);
+                border-color: var(--hairline-strong);
+                background: rgba(255, 255, 255, 0.05);
+            }
+
+            .dialog-body {
+                padding: 14px 16px;
+            }
+
+            .stage-row {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 10px 12px;
+                border: 1px solid var(--hairline);
+                border-bottom: none;
+            }
+
+            .stage-row:last-child {
+                border-bottom: 1px solid var(--hairline);
+            }
+
+            .stage-row .net {
+                width: 190px;
+            }
+
+            .stage-row .net b {
+                display: block;
+                font-size: 13px;
+                color: var(--text);
+            }
+
+            .stage-row .net span {
+                font-family: var(--mono);
+                font-size: 11px;
+                color: var(--text-3);
+            }
+
+            .stage-row .grow {
+                flex: 1;
+            }
+
+            .stage-row.done {
+                background: rgba(61, 220, 151, 0.04);
+            }
+
+            .stage-row.active {
+                background: var(--signal-soft);
+                box-shadow: inset 2px 0 0 var(--signal);
+            }
+
+            .stage-row.dead {
+                opacity: 0.75;
+            }
+
+            .kpis {
+                display: flex;
+                gap: 12px;
+                flex-wrap: wrap;
+                margin: 4px 0 12px;
+            }
+
+            .kpi {
+                flex: 1;
+                min-width: 170px;
+                border: 1px solid var(--hairline);
+                background: rgba(0, 0, 0, 0.2);
+                padding: 12px 14px;
+            }
+
+            .kpi .label {
+                font-size: 11px;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: var(--text-3);
+                font-family: var(--mono);
+            }
+
+            .kpi .value {
+                font-family: var(--mono);
+                font-size: 26px;
+                color: var(--text);
+                margin: 4px 0 1px;
+                font-variant-numeric: tabular-nums;
+            }
+
+            .kpi .sub {
+                font-family: var(--mono);
+                font-size: 11.5px;
+                color: var(--text-3);
+            }
+
+            .kpi.hero {
+                border-color: var(--signal);
+                box-shadow: inset 0 0 0 1px var(--signal);
+                background: var(--signal-soft);
+            }
+
+            .kpi.hero .value {
+                color: var(--signal);
+            }
+
+            .contrib {
+                height: 10px;
+                display: flex;
+                border: 1px solid var(--hairline-strong);
+                margin: 6px 0 4px;
+            }
+
+            .contrib > i {
+                display: block;
+                height: 100%;
+            }
+
+            .legend {
+                display: flex;
+                gap: 14px;
+                font-family: var(--mono);
+                font-size: 11.5px;
+                color: var(--text-3);
+                flex-wrap: wrap;
+            }
+
+            .legend em {
+                display: inline-block;
+                width: 9px;
+                height: 9px;
+                margin-right: 5px;
+                font-style: normal;
+            }
+
+            .pulse > i {
+                animation: pulsew 1.6s ease-in-out infinite alternate;
+            }
+
+            @keyframes pulsew {
+                from {
+                    width: 34%;
+                }
+                to {
+                    width: 52%;
+                }
+            }
+
+            .hint-list {
+                margin: 10px 0 0;
+                padding-left: 18px;
+            }
+
+            .hint-list li {
+                margin: 4px 0;
+                font-size: 13.5px;
+            }
+
+            .state {
+                display: none;
+            }
+
+            .state.on {
+                display: block;
+            }
+
+            .material-buttons {
+                display: flex;
+                gap: 8px;
+                margin: 12px 0;
+                flex-wrap: wrap;
+            }
+
+            .compare-arrow {
+                font-family: var(--mono);
+                color: var(--text-3);
+                padding: 0 4px;
+            }
+
+            footer.doc-foot {
+                margin-top: 40px;
+                border-top: 1px solid var(--hairline-strong);
+                padding-top: 14px;
+                font-family: var(--mono);
+                font-size: 12px;
+                color: var(--text-3);
+            }
+
+            @media (max-width: 760px) {
+                .stage-row .net {
+                    width: 120px;
+                }
+                .doc {
+                    padding: 24px 14px 60px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="doc">
+            <header class="doc-head">
+                <div class="kicker">Plexo UI Plan, version 1.0</div>
+                <h1>
+                    Feature 3: Sharp, Translucent Look.<br />
+                    Feature 4: Network Speed Test.
+                </h1>
+                <p class="sub">
+                    A design plan with live mockups of how the app will look. Everything on this
+                    page is a preview drawn with CSS, not a screenshot, so the corners, colors
+                    and glass levels are shown exactly as proposed. Planning only: no
+                    application code has been changed yet, and the checklists at the end list
+                    what needs a decision before implementation starts.
+                </p>
+                <div class="meta">
+                    2026-10-17, planning document for CS2403 CIE. Companion to Feature Reports 01
+                    and 02.
+                </div>
+            </header>
+
+            <!-- ================================================================
+                 FEATURE 3
+                 ================================================================ -->
+
+            <section class="board">
+                <h2><span class="tag">FEATURE 3</span>Corners: from 8 pixel rounds to sharp</h2>
+                <p class="lead">
+                    Today every shadcn and Base UI component shares
+                    <code>--radius: 8px</code>, the scrollbar thumb is a full pill
+                    (<code>border-radius: 9999px</code>), and several hand styled cards use 8px
+                    too. The proposal removes rounding everywhere and lets hairlines and spacing
+                    carry the structure instead. One exception: the switch knob stays a circle,
+                    because it is a knob and reads as hardware, not as a rounded corner.
+                </p>
+
+                <div class="corner-grid">
+                    <div class="corner-card">
+                        <div class="sample" style="border-radius: 12px"></div>
+                        <div class="cap">Today, some cards: 12px</div>
+                    </div>
+                    <div class="corner-card">
+                        <div class="sample" style="border-radius: 8px"></div>
+                        <div class="cap">Today, --radius: 8px</div>
+                    </div>
+                    <div class="corner-card pick">
+                        <div class="sample" style="border-radius: 0"></div>
+                        <div class="cap">Proposed: 0px, sharp on purpose</div>
+                    </div>
+                </div>
+
+                <table class="spec">
+                    <tr>
+                        <th>Surface</th>
+                        <th>Today</th>
+                        <th>Proposed</th>
+                    </tr>
+                    <tr>
+                        <td>Buttons, inputs, dialogs, cards, chips, tabs</td>
+                        <td>4.8 to 11.2px from the token scale</td>
+                        <td>0px</td>
+                    </tr>
+                    <tr>
+                        <td>Checkboxes and radio buttons</td>
+                        <td>Rounded corners, round radios</td>
+                        <td>0px boxes; radios stay circles (a dot in a ring)</td>
+                    </tr>
+                    <tr>
+                        <td>Switch track / knob</td>
+                        <td>Pill track, round knob</td>
+                        <td>Sharp track, round knob</td>
+                    </tr>
+                    <tr>
+                        <td>Progress bars, meter fills</td>
+                        <td>Small rounds in places</td>
+                        <td>0px</td>
+                    </tr>
+                    <tr>
+                        <td>Scrollbar thumb</td>
+                        <td>Full pill</td>
+                        <td>0px, a plain rectangle</td>
+                    </tr>
+                    <tr>
+                        <td>Outer window frame corners</td>
+                        <td colspan="2">
+                            Controlled by the OS window manager (KDE, for example, rounds its own
+                            frame on some themes). The app cannot change that from inside; all
+                            inner surfaces are what this plan controls.
+                        </td>
+                    </tr>
+                </table>
+
+                <p class="note">
+                    Small print: with rounds gone, one extra hairline of definition helps.
+                    Buttons and rows get a 1px border (or inset shadow) in the new hairline color,
+                    which the component gallery below shows. If 0px ever feels too raw on the
+                    eye, the fallback is 2px; the checklist asks for the final call.
+                </p>
+            </section>
+
+            <section class="board">
+                <h2><span class="tag">FEATURE 3</span>Palette: graphite instrument, signal cyan</h2>
+                <p class="lead">
+                    The current palette is a warm graphite with amber accents
+                    (<code>--color-accent: #d8a44c</code> dark, <code>#d97706</code> light). The
+                    proposal keeps the instrument panel feel but moves the accent to a cool
+                    signal cyan, which reads better on translucent dark glass, and it builds
+                    every surface color as a pair: a solid fallback plus an alpha version for the
+                    glass modes. Amber stays available as an alternate accent; the checklist
+                    asks which one to keep.
+                </p>
+
+                <h3>Dark theme (the main mode, shown throughout this document)</h3>
+                <div class="swatches">
+                    <div class="swatch">
+                        <div class="paint" style="background: #0c1015"></div>
+                        <div class="info">
+                            <b>Canvas</b>
+                            #0c1015<br />
+                            glass: rgba(12,16,21,0.72)
+                        </div>
+                    </div>
+                    <div class="swatch">
+                        <div class="paint" style="background: #161d26"></div>
+                        <div class="info">
+                            <b>Panel</b>
+                            #161d26<br />
+                            glass: rgba(24,31,40,0.66)
+                        </div>
+                    </div>
+                    <div class="swatch">
+                        <div class="paint" style="background: rgba(255, 255, 255, 0.09)"></div>
+                        <div class="info">
+                            <b>Hairline</b>
+                            rgba(255,255,255,0.09)<br />
+                            strong: 0.20
+                        </div>
+                    </div>
+                    <div class="swatch">
+                        <div class="paint" style="background: #e7edf3"></div>
+                        <div class="info">
+                            <b>Text</b>
+                            #e7edf3<br />
+                            second: #a6b0ba<br />
+                            third: #7f8a94
+                        </div>
+                    </div>
+                    <div class="swatch">
+                        <div class="paint" style="background: #35c7f5"></div>
+                        <div class="info">
+                            <b>Signal (accent)</b>
+                            #35c7f5<br />
+                            hover: #6bd8fa<br />
+                            ink: #052230
+                        </div>
+                    </div>
+                    <div class="swatch">
+                        <div class="paint" style="background: #3ddc97"></div>
+                        <div class="info">
+                            <b>Success</b>
+                            #3ddc97
+                        </div>
+                    </div>
+                    <div class="swatch">
+                        <div class="paint" style="background: #f5c451"></div>
+                        <div class="info">
+                            <b>Warning</b>
+                            #f5c451
+                        </div>
+                    </div>
+                    <div class="swatch">
+                        <div class="paint" style="background: #ff7a7a"></div>
+                        <div class="info">
+                            <b>Danger</b>
+                            #ff7a7a
+                        </div>
+                    </div>
+                    <div class="swatch">
+                        <div class="paint" style="background: #8fa7d6"></div>
+                        <div class="info">
+                            <b>Ethernet</b>
+                            #8fa7d6
+                        </div>
+                    </div>
+                    <div class="swatch">
+                        <div class="paint" style="background: #57c9b5"></div>
+                        <div class="info">
+                            <b>Wi-Fi</b>
+                            #57c9b5
+                        </div>
+                    </div>
+                    <div class="swatch">
+                        <div class="paint" style="background: #e0b25c"></div>
+                        <div class="info">
+                            <b>USB and other</b>
+                            #e0b25c
+                        </div>
+                    </div>
+                </div>
+
+                <h3>Light theme (cool paper, deeper cyan for contrast)</h3>
+                <div class="board-light">
+                    <div class="swatches">
+                        <div class="swatch">
+                            <div class="paint" style="background: #f2f5f8"></div>
+                            <div class="info">
+                                <b>Canvas</b>
+                                #f2f5f8<br />
+                                glass: rgba(247,249,252,0.82)
+                            </div>
+                        </div>
+                        <div class="swatch">
+                            <div class="paint" style="background: #ffffff"></div>
+                            <div class="info">
+                                <b>Panel</b>
+                                #ffffff<br />
+                                glass: rgba(255,255,255,0.72)
+                            </div>
+                        </div>
+                        <div class="swatch">
+                            <div class="paint" style="background: #0f151b"></div>
+                            <div class="info">
+                                <b>Text</b>
+                                #0f151b<br />
+                                second: #4c5866<br />
+                                third: #6b7784
+                            </div>
+                        </div>
+                        <div class="swatch">
+                            <div class="paint" style="background: #0b7fa8"></div>
+                            <div class="info">
+                                <b>Signal (accent)</b>
+                                #0b7fa8<br />
+                                ink: #ffffff
+                            </div>
+                        </div>
+                        <div class="swatch">
+                            <div class="paint" style="background: #0e8a63"></div>
+                            <div class="info">
+                                <b>Success</b>
+                                #0e8a63
+                            </div>
+                        </div>
+                        <div class="swatch">
+                            <div class="paint" style="background: #c23b3b"></div>
+                            <div class="info">
+                                <b>Danger</b>
+                                #c23b3b
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <p class="note">
+                    Contrast rule kept from the current app: body text meets WCAG AA on both the
+                    solid and the glass versions of its background. Mono numerals (Roboto Mono,
+                    tabular) stay for every rate, size and time, which is what makes the speed
+                    test numbers scan cleanly.
+                </p>
+            </section>
+
+            <section class="board">
+                <h2><span class="tag">FEATURE 3</span>Translucency: three levels</h2>
+                <p class="lead">
+                    Translucency is planned as a user setting with three levels, so slow machines
+                    and picky compositors do not pay for blur they cannot afford. Press the
+                    buttons to compare. All three mockups deliberately use the same wallpaper
+                    behind the window to make the difference visible.
+                </p>
+
+                <div class="material-buttons" id="materialButtons">
+                    <button class="btn" data-material="solid">Level 0: Solid</button>
+                    <button class="btn" data-material="panels">Level 1: Glass panels</button>
+                    <button class="btn" data-material="desktop">Level 2: Desktop glass</button>
+                </div>
+
+                <div class="desk">
+                    <div class="win" id="materialWin" data-material="panels">
+                        <div class="win-title">
+                            <span class="dot"></span>
+                            <span>Plexo</span>
+                            <span class="spacer"></span>
+                            <span
+                                class="mono"
+                                style="font-size: 11.5px; color: var(--text-3)"
+                                id="materialLabel"
+                                >glass panels</span
+                            >
+                            <span class="win-controls"><i class="min"></i><i class="max"></i></span>
+                        </div>
+                        <div class="win-body">
+                            <div class="toolbar glass-panel" style="border-bottom: 1px solid var(--hairline)">
+                                <span class="chip now">Downloads</span>
+                                <span class="chip">History</span>
+                                <span class="grow"></span>
+                                <span class="btn small">Auto organize</span>
+                                <span class="btn small">Learning</span>
+                                <span class="btn small primary">New download</span>
+                            </div>
+                            <div style="padding: 14px">
+                                <div class="glass-panel" style="border: 1px solid var(--hairline); padding: 12px">
+                                    <div class="dl-name">ubuntu-24.04.iso</div>
+                                    <div class="dl-sub">
+                                        412.6 MB of 1.9 GB, 12.4 MB/s, 2 networks
+                                    </div>
+                                    <div class="bar" style="margin-top: 8px"><i style="width: 42%"></i></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <table class="spec">
+                    <tr>
+                        <th>Level</th>
+                        <th>What is translucent</th>
+                        <th>Implementation notes for the real app</th>
+                    </tr>
+                    <tr>
+                        <td><strong>0, Solid</strong></td>
+                        <td>Nothing. Today's look.</td>
+                        <td>Opaque token values only. Always the fallback.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>1, Glass panels</strong></td>
+                        <td>Cards, dialogs, popovers and the title strip float on a canvas the app draws itself.</td>
+                        <td>Pure CSS: alpha tokens plus <code>backdrop-filter: blur(22px) saturate(140%)</code>. Works on every OS; no Electron window flags needed. Proposed default.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>2, Desktop glass</strong></td>
+                        <td>The whole window lets the desktop show through.</td>
+                        <td>
+                            Electron window becomes <code>transparent: true</code> with a clear
+                            background; macOS adds <code>vibrancy</code>, Windows 11
+                            <code>backgroundMaterial: acrylic</code>, Linux relies on the desktop
+                            compositor (fine on KDE and GNOME with effects on; some setups show
+                            no blur). Falls back to level 1 when unsupported.
+                        </td>
+                    </tr>
+                </table>
+
+                <p class="note">
+                    Risks already planned for: the colored window button overlay does not accept
+                    alpha, so in level 2 the controls get recolored to match the glass or are
+                    hidden until hover; some GPU drivers make large blurs expensive, so the
+                    setting has a "reduce transparency" note next to it and the app never blurs
+                    full screen surfaces; resizing a transparent Electron window can flash, so
+                    the canvas keeps a nearly opaque tint (0.72) instead of going fully clear.
+                </p>
+            </section>
+
+            <section class="board">
+                <h2><span class="tag">FEATURE 3</span>Component gallery in the new style</h2>
+                <p class="lead">
+                    The same controls the app uses today, redrawn with sharp corners, hairlines
+                    and the signal accent. This is the fastest way to judge whether the refresh
+                    reads well before anything is implemented.
+                </p>
+
+                <div
+                    class="glass-panel"
+                    style="border: 1px solid var(--hairline); padding: 18px"
+                >
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center">
+                        <span class="btn primary">New download</span>
+                        <span class="btn">Auto organize</span>
+                        <span class="btn ghost">Cancel</span>
+                        <span class="btn danger">Remove</span>
+                        <span class="chip">Queued</span>
+                        <span class="chip now">Downloading</span>
+                        <span class="chip good">Completed</span>
+                        <span class="chip warn">Paused</span>
+                        <span class="chip bad">Failed</span>
+                    </div>
+
+                    <div
+                        style="
+                            display: grid;
+                            grid-template-columns: 1fr 1fr;
+                            gap: 14px;
+                            margin-top: 18px;
+                        "
+                    >
+                        <label>
+                            <div class="muted" style="font-size: 12px; margin-bottom: 4px">
+                                Link (focused, sharp ring)
+                            </div>
+                            <span class="field focus-demo" style="display: block"
+                                >https://example.com/ubuntu.iso</span
+                            >
+                        </label>
+                        <div>
+                            <div class="muted" style="font-size: 12px; margin-bottom: 4px">
+                                Controls
+                            </div>
+                            <div style="display: flex; gap: 16px; align-items: center">
+                                <span class="check on"></span>
+                                <span class="check"></span>
+                                <span class="radio on"></span>
+                                <span class="switch on"><i></i></span>
+                                <span class="switch"><i></i></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 18px">
+                        <div class="muted" style="font-size: 12px; margin-bottom: 4px">
+                            Progress and numbers
+                        </div>
+                        <div class="bar"><i style="width: 62%"></i></div>
+                        <div class="bar warn" style="margin-top: 6px"><i style="width: 34%"></i></div>
+                        <div class="bar good" style="margin-top: 6px"><i style="width: 88%"></i></div>
+                        <div class="mono" style="margin-top: 8px; font-size: 12.5px">
+                            231.4 Mbps <span class="muted">(28.9 MB/s)</span>, 412.6 MB of 1.9 GB,
+                            00:41 left
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ================================================================
+                 FEATURE 4
+                 ================================================================ -->
+
+            <section class="board">
+                <h2><span class="tag">FEATURE 4</span>Speed test: where it lives</h2>
+                <p class="lead">
+                    The test is for the moment before a download starts: a link is pasted, and
+                    the user wants to know what the networks can do before committing to a big
+                    file. So the primary entry point is a <strong>Test speed</strong> button
+                    inside New Download, next to the networks row. A second entry point in the
+                    Networks menu ("Test networks...") is proposed so the test can also run
+                    without a link; the checklist asks if that is wanted in version one.
+                </p>
+
+                <div class="desk">
+                    <div class="win" data-material="panels">
+                        <div class="win-title">
+                            <span class="dot"></span>
+                            <span>New download</span>
+                            <span class="spacer"></span>
+                            <span class="win-controls"><i class="min"></i><i class="max"></i></span>
+                        </div>
+                        <div class="win-body">
+                            <div style="padding: 16px; max-width: 560px">
+                                <div class="muted" style="font-size: 12px; margin-bottom: 4px">Link</div>
+                                <span class="field" style="display: block"
+                                    >https://releases.ubuntu.com/24.04/ubuntu-24.04.iso</span
+                                >
+                                <div class="muted" style="font-size: 12px; margin: 12px 0 4px">
+                                    Networks, 2 of 3 on
+                                </div>
+                                <div class="stage-row" style="border: 1px solid var(--hairline)">
+                                    <span class="check on"></span>
+                                    <div class="net">
+                                        <b style="color: var(--net-steel)">Ethernet</b>
+                                        <span>enp3s0, gigabit</span>
+                                    </div>
+                                    <span class="grow"></span>
+                                    <span class="chip good">On</span>
+                                </div>
+                                <div class="stage-row" style="border: 1px solid var(--hairline)">
+                                    <span class="check on"></span>
+                                    <div class="net">
+                                        <b style="color: var(--net-teal)">Wi-Fi</b>
+                                        <span>wlan0, 5 GHz</span>
+                                    </div>
+                                    <span class="grow"></span>
+                                    <span class="chip good">On</span>
+                                </div>
+                                <div class="stage-row" style="border: 1px solid var(--hairline)">
+                                    <span class="check"></span>
+                                    <div class="net">
+                                        <b style="color: var(--net-amber)">USB tethering</b>
+                                        <span>usb0, phone</span>
+                                    </div>
+                                    <span class="grow"></span>
+                                    <span class="chip">Off</span>
+                                </div>
+                                <div style="display: flex; gap: 10px; margin-top: 16px">
+                                    <span class="btn">Test speed</span>
+                                    <span class="grow" style="flex: 1"></span>
+                                    <span class="btn ghost">Cancel</span>
+                                    <span class="btn primary">Download</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="note">
+                    Test target rule: if the pasted link answers a small range request (the probe
+                    the app already runs), the test downloads from that same URL when it is a
+                    file. Otherwise it uses the default test endpoint, which is configurable, and
+                    the dialog always shows the target before the test starts. No result or
+                    measurement ever leaves the machine; the only network use is the download the
+                    user asked for.
+                </p>
+            </section>
+
+            <section class="board">
+                <h2><span class="tag">FEATURE 4</span>The dialog, three states</h2>
+                <p class="lead">
+                    Press the tabs to walk through the planned flow: pick networks, watch the
+                    stages run with progress and cancel, then read the results. The mockup uses a
+                    realistic example: Ethernet and Wi-Fi selected, one network unreachable, a
+                    two stage run plus the combined stage.
+                </p>
+
+                <div class="desk">
+                    <div class="win dialog-window" data-material="panels" style="max-width: 680px; margin: 0 auto">
+                        <div class="win-title">
+                            <span class="dot"></span>
+                            <span>Test network speed</span>
+                            <span class="spacer"></span>
+                            <span class="win-controls"><i class="min"></i><i class="max"></i></span>
+                        </div>
+                        <div class="win-body">
+                            <div class="dialog-head">
+                                <h3>Test network speed</h3>
+                                <div class="sub">
+                                    Measures each selected network on its own, then all working
+                                    ones together.
+                                </div>
+                            </div>
+
+                            <div class="dialog-tabs" id="testTabs">
+                                <span class="tab on" data-state="select">1. Select</span>
+                                <span class="tab" data-state="running">2. Running</span>
+                                <span class="tab" data-state="results">3. Results</span>
+                            </div>
+
+                            <!-- State 1: selection -->
+                            <div class="dialog-body state on" data-state="select">
+                                <div class="muted" style="font-size: 12px; margin-bottom: 6px">
+                                    Test target
+                                </div>
+                                <span class="field" style="display: block"
+                                    >https://speed.example.net/files/test.bin (default endpoint)</span
+                                >
+
+                                <div class="muted" style="font-size: 12px; margin: 12px 0 6px">
+                                    Networks to test, all on by default
+                                </div>
+                                <div class="stage-row" style="border: 1px solid var(--hairline)">
+                                    <span class="check on"></span>
+                                    <div class="net">
+                                        <b style="color: var(--net-steel)">Ethernet</b>
+                                        <span>enp3s0, gigabit</span>
+                                    </div>
+                                    <span class="grow"></span>
+                                    <span class="chip good">Selected</span>
+                                </div>
+                                <div class="stage-row" style="border: 1px solid var(--hairline)">
+                                    <span class="check on"></span>
+                                    <div class="net">
+                                        <b style="color: var(--net-teal)">Wi-Fi</b>
+                                        <span>wlan0, 5 GHz</span>
+                                    </div>
+                                    <span class="grow"></span>
+                                    <span class="chip good">Selected</span>
+                                </div>
+                                <div class="stage-row" style="border: 1px solid var(--hairline)">
+                                    <span class="check on"></span>
+                                    <div class="net">
+                                        <b style="color: var(--net-amber)">USB tethering</b>
+                                        <span>usb0, phone</span>
+                                    </div>
+                                    <span class="grow"></span>
+                                    <span class="chip good">Selected</span>
+                                </div>
+
+                                <div class="note" style="margin-top: 12px">
+                                    <strong>This test downloads real data.</strong> Up to 4 stages
+                                    (3 networks and one combined), 2 s warm-up plus 10 s measure
+                                    per stage, capped at 100 MB per stage. Typical use: 40 to 400
+                                    MB. Nothing is saved to disk; every response body is read and
+                                    discarded.
+                                </div>
+
+                                <div style="display: flex; gap: 10px; margin-top: 14px">
+                                    <span class="btn primary">Start test</span>
+                                    <span class="grow" style="flex: 1"></span>
+                                    <span class="btn ghost">Cancel</span>
+                                </div>
+                            </div>
+
+                            <!-- State 2: running -->
+                            <div class="dialog-body state" data-state="running">
+                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px">
+                                    <div class="bar pulse" style="flex: 1"><i></i></div>
+                                    <span class="mono" style="font-size: 12px; color: var(--text-2)"
+                                        >stage 2 of 3</span
+                                    >
+                                    <span class="chip now">48.6 MB used</span>
+                                </div>
+
+                                <div class="stage-row done">
+                                    <span class="chip good">Done</span>
+                                    <div class="net">
+                                        <b style="color: var(--net-steel)">Ethernet alone</b>
+                                        <span>8 streams, warm-up 2 s, measure 10 s</span>
+                                    </div>
+                                    <span class="grow"></span>
+                                    <span class="num">212.8 Mbps</span>
+                                </div>
+                                <div class="stage-row active">
+                                    <span class="chip now">Live</span>
+                                    <div class="net">
+                                        <b style="color: var(--net-teal)">Wi-Fi alone</b>
+                                        <span>8 streams, warming up</span>
+                                    </div>
+                                    <span class="grow"></span>
+                                    <span class="num">46.2 Mbps</span>
+                                </div>
+                                <div class="stage-row dead">
+                                    <span class="chip bad">Unreachable</span>
+                                    <div class="net">
+                                        <b style="color: var(--net-amber)">USB tethering</b>
+                                        <span>no route to the test server</span>
+                                    </div>
+                                    <span class="grow"></span>
+                                    <span class="muted mono" style="font-size: 12px">skipped</span>
+                                </div>
+                                <div class="stage-row">
+                                    <span class="chip">Waiting</span>
+                                    <div class="net">
+                                        <b>Combined</b>
+                                        <span>8 streams split across working networks</span>
+                                    </div>
+                                    <span class="grow"></span>
+                                    <span class="muted mono" style="font-size: 12px">pending</span>
+                                </div>
+
+                                <p style="font-size: 13px; margin: 12px 0 0">
+                                    Live rate updates once per second after warm-up. Cancelling
+                                    stops every stream at once; partial numbers stay on screen and
+                                    are marked partial.
+                                </p>
+
+                                <div style="display: flex; gap: 10px; margin-top: 14px">
+                                    <span class="btn danger">Cancel test</span>
+                                    <span class="grow" style="flex: 1"></span>
+                                    <span class="muted mono" style="font-size: 12px"
+                                        >nothing written to disk</span
+                                    >
+                                </div>
+                            </div>
+
+                            <!-- State 3: results -->
+                            <div class="dialog-body state" data-state="results">
+                                <div class="kpis">
+                                    <div class="kpi hero">
+                                        <div class="label">Combined</div>
+                                        <div class="value">231.4 Mbps</div>
+                                        <div class="sub">28.9 MB/s, 8 streams together</div>
+                                    </div>
+                                    <div class="kpi">
+                                        <div class="label">Fastest single</div>
+                                        <div class="value">212.8 Mbps</div>
+                                        <div class="sub">Ethernet, 26.6 MB/s</div>
+                                    </div>
+                                    <div class="kpi">
+                                        <div class="label">Together vs fastest</div>
+                                        <div class="value" style="color: var(--good)">+8.7%</div>
+                                        <div class="sub">small gain, expected when one link dominates</div>
+                                    </div>
+                                </div>
+
+                                <table class="spec" style="margin-top: 2px">
+                                    <tr>
+                                        <th>Network</th>
+                                        <th>Alone</th>
+                                        <th>Contribution in combined stage</th>
+                                        <th>Bytes carried</th>
+                                    </tr>
+                                    <tr>
+                                        <td><strong style="color: var(--net-steel)">Ethernet</strong></td>
+                                        <td class="num">212.8 Mbps</td>
+                                        <td class="num">88.4%</td>
+                                        <td class="num">185.7 MB</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong style="color: var(--net-teal)">Wi-Fi</strong></td>
+                                        <td class="num">46.2 Mbps</td>
+                                        <td class="num">11.6%</td>
+                                        <td class="num">24.4 MB</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong style="color: var(--net-amber)">USB tethering</strong></td>
+                                        <td class="muted">unreachable</td>
+                                        <td class="muted">not in combined stage</td>
+                                        <td class="muted">0 MB</td>
+                                    </tr>
+                                </table>
+
+                                <div class="contrib" aria-hidden="true">
+                                    <i style="width: 88.4%; background: var(--net-steel)"></i>
+                                    <i style="width: 11.6%; background: var(--net-teal)"></i>
+                                </div>
+                                <div class="legend">
+                                    <span><em style="background: var(--net-steel)"></em>Ethernet 88.4%</span>
+                                    <span><em style="background: var(--net-teal)"></em>Wi-Fi 11.6%</span>
+                                </div>
+
+                                <ul class="hint-list">
+                                    <li>
+                                        <strong>Shared upstream:</strong> if two networks share one
+                                        router or one ISP link, the combined number can be close to
+                                        the fastest single number instead of the sum. That is not a
+                                        bug; the shared link is the bottleneck.
+                                    </li>
+                                    <li>
+                                        <strong>Conditions change:</strong> stages run one after
+                                        the other, so the network can change between them. Treat
+                                        small differences as noise, and run the test again if the
+                                        numbers look surprising.
+                                    </li>
+                                    <li>
+                                        <strong>Data used:</strong> 210.1 MB total, all of it
+                                        discarded. Unreachable networks are listed instead of
+                                        silently dropped.
+                                    </li>
+                                </ul>
+
+                                <div style="display: flex; gap: 10px; margin-top: 14px">
+                                    <span class="btn">Run again</span>
+                                    <span class="btn ghost">Copy results</span>
+                                    <span class="grow" style="flex: 1"></span>
+                                    <span class="btn primary">Done</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="board">
+                <h2><span class="tag">FEATURE 4</span>Measurement plan, the rules behind the numbers</h2>
+                <p class="lead">
+                    These rules exist so the comparison is fair and the numbers mean something.
+                    They are requirements for the implementation, shown here without code.
+                </p>
+
+                <table class="spec">
+                    <tr>
+                        <th>Stage</th>
+                        <th>Networks in use</th>
+                        <th>Streams</th>
+                        <th>Warm-up</th>
+                        <th>Measure window</th>
+                        <th>What it produces</th>
+                    </tr>
+                    <tr>
+                        <td>Probe (per selected network)</td>
+                        <td>That network only</td>
+                        <td>1</td>
+                        <td>none</td>
+                        <td>one 64 KB range request</td>
+                        <td>Reachable, or Unreachable with a reason</td>
+                    </tr>
+                    <tr>
+                        <td>Alone stage (per reachable network)</td>
+                        <td>That network only</td>
+                        <td>8 on it</td>
+                        <td>2 s, counted for data use but not for rate</td>
+                        <td>10 s, or 100 MB cap</td>
+                        <td>That network's Mbps</td>
+                    </tr>
+                    <tr>
+                        <td>Combined stage</td>
+                        <td>All reachable networks together</td>
+                        <td>8 split as evenly as possible (remainder goes to the fastest alone stage)</td>
+                        <td>same 2 s</td>
+                        <td>same 10 s / 100 MB</td>
+                        <td>Combined Mbps, per network bytes for contribution</td>
+                    </tr>
+                </table>
+
+                <ul class="hint-list">
+                    <li>
+                        <strong>Same stream count everywhere.</strong> All stages use 8 streams,
+                        the app's standard setting, so a single stream test does not undersell a
+                        link and the combined stage compares like with like. (One TCP stream can
+                        mask capacity it is not allowed to use; eight can hide it too, but at
+                        least the comparison is fair between stages.)
+                    </li>
+                    <li>
+                        <strong>Warm-up first, then measure.</strong> The first 2 s of every
+                        stage are discarded from the rate because TCP starts slow (congestion
+                        window ramp) and speed of a link is about its steady state.
+                    </li>
+                    <li>
+                        <strong>Mbps math.</strong> Rate = measured bytes x 8 / 1,000,000 / seconds.
+                        The dialog shows Mbps as the headline, MB/s in mono as secondary, matching
+                        the app's speed unit setting.
+                    </li>
+                    <li>
+                        <strong>Bodies are discarded.</strong> Every ranged GET is read in chunks
+                        and dropped; nothing touches the disk, staging files are never involved,
+                        and no test file is created anywhere. A cancel aborts all streams in one
+                        step through one controller.
+                    </li>
+                    <li>
+                        <strong>Reachability first.</strong> Each selected network is probed
+                        before any measuring. An unreachable network is reported explicitly, kept
+                        out of the combined stage, and still shown in the results table.
+                    </li>
+                    <li>
+                        <strong>Sequential, so state changes matter.</strong> Stages run one at a
+                        time (parallel per network tests would compete for the shared upstream
+                        and for disk and CPU, and would not answer "what can each one do"). The
+                        dialog says so, in the results notes.
+                    </li>
+                </ul>
+            </section>
+
+            <section class="board">
+                <h2><span class="tag">FEATURE 4</span>Implementation sketch (for the build step)</h2>
+                <ul class="hint-list">
+                    <li>
+                        <strong>Main process module:</strong> a new
+                        <code>speedtest.ts</code> next to the download engine that reuses the
+                        existing per interface socket binding, the per network meters, and the
+                        range request code, without the block planner and without writing files.
+                        It owns the stage machine: probe, then stages in order, then combined.
+                    </li>
+                    <li>
+                        <strong>IPC:</strong> <code>speedtest:start</code> (selected network ids
+                        and the target URL), <code>speedtest:update</code> events for live
+                        progress, <code>speedtest:cancel</code>, and a final result payload
+                        (per network Mbps, combined, contributions, unreachable list, bytes
+                        used). Typed through the same contract file the other channels use.
+                    </li>
+                    <li>
+                        <strong>Renderer:</strong> a <code>SpeedTestDialog</code> component in the
+                        new style, opened from New Download and optionally from the Networks
+                        menu. It only renders state from the update events; no measurement logic
+                        in the renderer.
+                    </li>
+                    <li>
+                        <strong>Persistence:</strong> none in version one. Results live for the
+                        session; a "last result" chip could appear next to the networks row
+                        (roadmap, not this plan).
+                    </li>
+                    <li>
+                        <strong>Feature 3 order of work:</strong> palette and radius tokens first
+                        (one file, entire app follows), then component pass for the few hand
+                        styled surfaces, then the material setting with its fallbacks. The speed
+                        test is then built directly in the new style, so it never needs a
+                        redesign later.
+                    </li>
+                </ul>
+            </section>
+
+            <section class="board">
+                <h2><span class="tag">DECISIONS</span>What needs your call</h2>
+                <table class="spec">
+                    <tr>
+                        <th>Decision</th>
+                        <th>Options</th>
+                    </tr>
+                    <tr>
+                        <td>Corner radius</td>
+                        <td><strong>0px everywhere (proposed)</strong>, or a 2px softening pass</td>
+                    </tr>
+                    <tr>
+                        <td>Accent</td>
+                        <td><strong>Signal cyan #35c7f5 (proposed)</strong>, or keep the amber family</td>
+                    </tr>
+                    <tr>
+                        <td>Default material level</td>
+                        <td>Level 0 solid / <strong>Level 1 glass panels (proposed)</strong> / Level 2 desktop glass</td>
+                    </tr>
+                    <tr>
+                        <td>Speed test entry points</td>
+                        <td><strong>New Download button (proposed)</strong>, optionally also Networks menu</td>
+                    </tr>
+                    <tr>
+                        <td>Stage sizes</td>
+                        <td><strong>8 streams, 2 s warm-up, 10 s / 100 MB per stage (proposed)</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Default test endpoint</td>
+                        <td>Pick one fixed default (proposed: a known speed test file), always shown before the run</td>
+                    </tr>
+                    <tr>
+                        <td>Copy results button</td>
+                        <td>Include in version one, or roadmap</td>
+                    </tr>
+                </table>
+                <p class="note">
+                    Once these are settled, implementation can start. Nothing here changes
+                    Features 1 and 2: the organize dialog and learning dialog keep working as
+                    they are, and inherit the new tokens automatically when the refresh lands.
+                </p>
+            </section>
+
+            <footer class="doc-foot">
+                Planning document only. No application code was changed for this page. Mockups
+                are CSS drawings; real behavior will be verified with Playwright and the fixture
+                server, as Features 1 and 2 were.
+            </footer>
+        </div>
+
+        <script>
+            // Translucency demo switch
+            const win = document.getElementById('materialWin')
+            const label = document.getElementById('materialLabel')
+            const labels = {
+                solid: 'solid, today',
+                panels: 'glass panels',
+                desktop: 'desktop glass'
+            }
+            document.querySelectorAll('#materialButtons [data-material]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    const level = button.getAttribute('data-material')
+                    win.setAttribute('data-material', level)
+                    label.textContent = labels[level]
+                })
+            })
+
+            // Speed test dialog state tabs
+            const tabs = document.querySelectorAll('#testTabs .tab')
+            const states = document.querySelectorAll('.state')
+            tabs.forEach(function (tab) {
+                tab.addEventListener('click', function () {
+                    const state = tab.getAttribute('data-state')
+                    tabs.forEach(function (other) {
+                        other.classList.toggle('on', other === tab)
+                    })
+                    states.forEach(function (panel) {
+                        if (panel.classList.contains('dialog-body')) {
+                            panel.classList.toggle('on', panel.getAttribute('data-state') === state)
+                        }
+                    })
+                })
+            })
+        </script>
+    </body>
+</html>

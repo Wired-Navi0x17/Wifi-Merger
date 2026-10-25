@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plexo Whitepaper: Faster Downloads With Many Networks</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <div class="brand">
+      <span class="brand-mark">P</span>
+      <span class="brand-text">Plexo Whitepaper</span>
+    </div>
+    <nav class="nav">
+      <a href="#problem">Problem</a>
+      <a href="#background">Layers</a>
+      <a href="#solution">Solution</a>
+      <a href="#merge">Merge</a>
+      <a href="#conflicts">Conflicts</a>
+      <a href="#runlive">Run live</a>
+      <a href="#evidence">Evidence</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="hero">
+    <div class="blob b1"></div>
+    <div class="blob b2"></div>
+    <div class="blob b3"></div>
+    <p class="kicker">Whitepaper for CS2403 Computer Networks, version 2.0, date 2026-10-16</p>
+    <h1>One file. <span class="hl hl-blue">Many networks.</span> <span class="hl hl-green">One fast download.</span></h1>
+    <p class="lede">Plexo lives at OSI Layer 7. It opens many TCP connections at Layer 4. It pins each one to its own IP path at Layer 3. Then it merges the parts back into one file.</p>
+    <div class="hero-cards">
+      <div class="hero-card pop">
+        <div class="hero-num">L7</div>
+        <div class="hero-label">Application layer is home: HTTP Range, BitTorrent, DNS, cookies</div>
+      </div>
+      <div class="hero-card pop d1">
+        <div class="hero-num">L4</div>
+        <div class="hero-label">Transport layer is the engine: TCP sockets, ports, seq numbers, windows</div>
+      </div>
+      <div class="hero-card pop d2">
+        <div class="hero-num">L3</div>
+        <div class="hero-label">Network layer is the steering: IPv4 and IPv6, routing, source IP, device bind</div>
+      </div>
+    </div>
+    <div class="plain-box">
+      <h2>30 second summary</h2>
+      <ol>
+        <li>You have Wi-Fi plus phone data. Each path alone is slow.</li>
+        <li>Plexo asks for bytes 0 to 8M through Wi-Fi and bytes 8M to 16M through phone, at the same time.</li>
+        <li>Both TCP streams land at exact file offsets. The merge is byte exact.</li>
+        <li>For torrents, peers spread across networks by fewest peers first.</li>
+        <li>Conflicts are handled: same subnet warns, dead route retires, changed file aborts safely.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="problem" class="paper">
+    <p class="sec-num">Section 1: Problem statement</p>
+    <h2>One pipe is slow. Two pipes sit idle.</h2>
+    <p class="simple">A normal app opens one TCP connection. That one connection has one congestion window, one round trip limit, and one ISP cap. Your second interface does nothing.</p>
+    <div class="demo fun">
+      <h3>Lab 1: one pipe vs two pipes</h3>
+      <p class="hint">Move sliders. Time equals size divided by total throughput. Overhead makes real gain a bit lower.</p>
+      <label>File size: <span id="probSizeLabel">1000 MB</span></label>
+      <input type="range" id="probSize" min="100" max="5000" step="100" value="1000">
+      <label>Wi-Fi throughput: <span id="probWifiLabel">20 Mbps</span></label>
+      <input type="range" id="probWifi" min="5" max="100" step="5" value="20">
+      <label>Phone throughput: <span id="probPhoneLabel">15 Mbps</span></label>
+      <input type="range" id="probPhone" min="0" max="100" step="5" value="15">
+      <div class="bars">
+        <div class="bar-row">
+          <span>Single path</span>
+          <div class="bar-track"><div class="bar-fill one" id="barOne"></div></div>
+          <span id="timeOne">66 min</span>
+        </div>
+        <div class="bar-row">
+          <span>Merged paths</span>
+          <div class="bar-track"><div class="bar-fill two" id="barTwo"></div></div>
+          <span id="timeTwo">38 min</span>
+        </div>
+      </div>
+      <p class="note" id="probNote">Math: seconds equals megabytes times 8 divided by megabits per second.</p>
+    </div>
+  </section>
+
+  <section id="background" class="paper">
+    <p class="sec-num">Section 2: Background and research</p>
+    <h2>OSI layers, with real network terms</h2>
+    <p class="simple">Every byte travels down 7 OSI layers on send and back up on receive. Each layer adds its own header. Each layer speaks its own unit: message, segment, packet, frame, bits. Click each layer for the full story.</p>
+
+    <div class="demo fun">
+      <h3>Lab 2: OSI layer explorer (official names, no nicknames)</h3>
+      <div class="layers">
+        <div class="layer-grid">
+          <button class="layer-btn l7 active" data-layer="7">L7 Application: HTTP, BitTorrent, DHT, DNS</button>
+          <button class="layer-btn l6" data-layer="6">L6 Presentation: TLS, encoding, certs</button>
+          <button class="layer-btn l5" data-layer="5">L5 Session: keep alive, peer wire</button>
+          <button class="layer-btn l4" data-layer="4">L4 Transport: TCP segments, UDP datagrams</button>
+          <button class="layer-btn l3" data-layer="3">L3 Network: IPv4 and IPv6 packets, routing</button>
+          <button class="layer-btn l2" data-layer="2">L2 Data Link: Ethernet and Wi-Fi frames, MAC, ARP, MTU</button>
+          <button class="layer-btn l1" data-layer="1">L1 Physical: bits, radio, cable, USB tether</button>
+        </div>
+        <div class="layer-info">
+          <h4 id="layerTitle">L7 Application</h4>
+          <p id="layerPdu" class="pdu">PDU: data and messages</p>
+          <p id="layerText">Protocols: HTTP/1.1 Range, BitTorrent wire, DHT, tracker HTTP, DNS names. Plexo sends GET with Range: bytes=s-e and expects 206 Partial Content plus Content-Range. For torrents it speaks handshake, bitfield, have, request, piece. DNS lookup uses lookup(all:true). Cookies follow RFC 6265 per redirect hop. Code: probe.ts, chunkDownloader.ts, torrentTransfer.ts.</p>
+          <p id="layerPlexo" class="plexo-line">Plexo action: decide what bytes to ask for and check every answer before writing.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo fun">
+      <h3>Lab 3: encapsulation stack (what wraps what)</h3>
+      <p class="hint">Press Next to wrap one HTTP Range request layer by layer. PDU names change at each step.</p>
+      <div class="encap" id="encapStack"></div>
+      <div class="step-btns">
+        <button class="btn ghost" id="encPrev">Back</button>
+        <button class="btn" id="encNext">Wrap next layer</button>
+        <button class="btn ghost" id="encReset">Reset</button>
+      </div>
+      <p class="note" id="encapNote">Start: pure HTTP data at L7.</p>
+    </div>
+
+    <h3>TCP/IP view in one table</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>TCP/IP layer</th><th>OSI inside</th><th>PDU</th><th>Plexo control</th></tr>
+        <tr><td>Application</td><td>L5, L6, L7</td><td>data</td><td>Full: split plan, scheduler, peer pick, cookie jar, bridge JSON</td></tr>
+        <tr><td>Transport</td><td>L4</td><td>segment (TCP) or datagram (UDP)</td><td>Full: socket per stream, ports, seq and ack are TCP owned, window backpressure via pause, Happy Eyeballs race</td></tr>
+        <tr><td>Internet</td><td>L3</td><td>packet</td><td>Strong: source IP pick, family match, DNS resolve with deadline, SO_BINDTODEVICE on Linux, longest prefix route is OS owned</td></tr>
+        <tr><td>Network Access</td><td>L1, L2</td><td>frame then bits</td><td>Read only: adapter enum, MAC read, MTU and ARP are OS and driver owned</td></tr>
+      </table>
+    </div>
+
+    <h3>Core terms you must know for viva</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Term</th><th>Layer</th><th>One line plus Plexo link</th></tr>
+        <tr><td>TCP 3 way handshake (SYN, SYN-ACK, ACK)</td><td>L4</td><td>Opens each stream. Plexo races one per route and keeps the winner.</td></tr>
+        <tr><td>Sequence and ack numbers</td><td>L4</td><td>Order bytes inside one TCP stream. Plexo orders across streams by file offset, not by TCP seq.</td></tr>
+        <tr><td>Congestion window and slow start</td><td>L4</td><td>Why one TCP is slow to ramp. Why 8 to 32 streams beat one capped stream.</td></tr>
+        <tr><td>Receive window and flow control</td><td>L4</td><td>Why pause() slows the sender with zero drops. Used by speed limits.</td></tr>
+        <tr><td>Port numbers</td><td>L4</td><td>80 HTTP, 443 HTTPS, random for BitTorrent peers, 19288 to 19290 for local bridge.</td></tr>
+        <tr><td>IPv4, IPv6, netmask, CIDR, gateway</td><td>L3</td><td>Plexo computes subnet as IP AND mask, warns on same subnet, needs own gateway per net for gain.</td></tr>
+        <tr><td>Routing table, longest prefix match</td><td>L3</td><td>OS picks exit by table. Linux ignores source IP, so Plexo pins device.</td></tr>
+        <tr><td>NAT</td><td>L3</td><td>Home router rewrites private IP to public IP. Phone CGNAT adds another layer. Both still allow outbound TCP.</td></tr>
+        <tr><td>DNS A vs AAAA</td><td>L7</td><td>IPv4 vs IPv6 answers. Plexo keeps families paired with local addresses.</td></tr>
+        <tr><td>TLS handshake, cert, SNI, session resume</td><td>L6</td><td>Plexo verifies cert against host and reuses sessions on warm sockets.</td></tr>
+        <tr><td>MAC, ARP, MTU 1500, frame</td><td>L2</td><td>Wi-Fi and Ethernet framing. Plexo never crafts frames. MTU shapes TCP MSS behind the scenes.</td></tr>
+        <tr><td>BitTorrent infohash, piece, bitfield</td><td>L7</td><td>Piece hash must verify before bytes count. Unverified bytes stay provisional.</td></tr>
+      </table>
+    </div>
+
+    <h3>Prior art and limits</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Method</th><th>Layer of merge</th><th>Needs</th><th>Limit</th></tr>
+        <tr><td>Single browser download</td><td>none</td><td>one route</td><td>One congestion window caps speed</td></tr>
+        <tr><td>Download manager (IDM, aria2)</td><td>L7 Range split, one interface</td><td>Range support</td><td>Second interface still idle</td></tr>
+        <tr><td>VPN bonding</td><td>L3 tunnel plus relay</td><td>Relay server, tunnel driver</td><td>Cost, extra hop, complex failover</td></tr>
+        <tr><td>MP-TCP</td><td>L4 multipath TCP</td><td>Both ends plus path support</td><td>Rare server support, OS dependent</td></tr>
+        <tr><td>Plexo</td><td>L7 split plus L4 pin per L3 path</td><td>Range or swarm, two independent paths</td><td>No gain on shared router or no Range host</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section id="solution" class="paper">
+    <p class="sec-num">Section 3: Proposed solution</p>
+    <h2>Find, pin, fetch, merge</h2>
+    <p class="simple">Four moves repeat for every download: find networks, pin sockets, fetch parts, merge bytes. Each move has guards against conflicts (next section).</p>
+    <div class="arch">
+      <div class="arch-box"><b>Browser add-on</b><span>Catches link, collects cookies, POST to 127.0.0.1 /add</span></div>
+      <div class="arch-arrow">go</div>
+      <div class="arch-box hot"><b>Engine main process</b><span>interfaces.ts, routes.ts, probe.ts, httpTransfer.ts, torrentTransfer.ts, limits.ts</span></div>
+      <div class="arch-arrow">go</div>
+      <div class="arch-box"><b>React screen</b><span>Zustand store, charts, block grid, delta IPC updates</span></div>
+    </div>
+
+    <h3>Step A: find networks (L2 info, L3 addresses)</h3>
+    <p class="simple">Call os.networkInterfaces. Drop internal, 169.254.x.x, fe80. Compute subnet with IP AND mask. Name cards per OS: networksetup on macOS, Get-NetAdapter on Windows, name regex on Linux. Poll each 1000 ms. No OS event exists for plug, so poll is required.</p>
+    <div class="demo fun">
+      <h3>Live demo: unplug simulation</h3>
+      <div class="net-row">
+        <div class="net-card" id="netWifi"><b>Wi-Fi wlan0</b><span>192.168.1.5 / 255.255.255.0</span><span>subnet 192.168.1.0/24, gw 192.168.1.1</span><span class="pill on">on</span></div>
+        <div class="net-card" id="netPhone"><b>Phone usb0</b><span>192.168.42.10 / 255.255.255.0</span><span>subnet 192.168.42.0/24, gw 192.168.42.129</span><span class="pill on">on</span></div>
+      </div>
+      <button class="btn" id="btnUnplug">Unplug phone</button>
+      <button class="btn ghost" id="btnReplug">Plug back</button>
+      <p class="note" id="netNote">Both on with own gateway, so gain is real. Shared gateway would mean no gain.</p>
+    </div>
+
+    <h3>Step B: pin sockets (L4 plus L3)</h3>
+    <p class="simple">Mac and Windows route by source IP, so localAddress is enough. Linux picks exit from the routing table only, so Plexo also calls setsockopt with SO_BINDTODEVICE through koffi libc. It passes both device and source IP because one card can hold many IPv6 addresses. Loopback skips bind.</p>
+    <div class="code-look">connectRoute({ device: wlan0, localAddress: 192.168.1.5, remoteAddress: 93.184.216.34 }, 443)<br>Linux: fd = socket(AF_INET, STREAM) then setsockopt(SO_BINDTODEVICE, wlan0) then connect()<br>Happy Eyeballs: race v4 vs v6 with 250 ms stagger, cache winner in lastGoodRoute</div>
+
+    <div class="demo fun">
+      <h3>Lab 4: one packet life, 8 taps</h3>
+      <div class="stepper">
+        <div class="step-view" id="packetView">Step 1 of 8</div>
+        <p class="note" id="packetText">Press Next.</p>
+        <div class="step-btns">
+          <button class="btn ghost" id="pktPrev">Back</button>
+          <button class="btn" id="pktNext">Next</button>
+        </div>
+        <div class="dots" id="pktDots"></div>
+      </div>
+    </div>
+
+    <h3>Step C: HTTP fetch with Range (L7)</h3>
+    <p class="simple">Probe GET bytes 0 to 1023. Status 206 means split. Status 200 means single stream. Cut into 1 to 8 MB blocks. Start 8 streams per net, grow to 32 on health, cut on 403, 429, 503 or disk behind. Hedge the tail so one slow block cannot hold the file.</p>
+    <div class="demo fun">
+      <h3>Lab 5: splitter plus parallel fetch</h3>
+      <label>File size (MB): <span id="splitSizeLabel">100</span></label>
+      <input type="range" id="splitSize" min="5" max="1000" step="5" value="100">
+      <label>Networks: <span id="splitNetLabel">2</span></label>
+      <input type="range" id="splitNet" min="1" max="4" step="1" value="2">
+      <p class="note" id="splitInfo">Target equals nets x 32 x 2. Clamp 1 to 8 MB.</p>
+      <div class="blocks" id="splitBlocks"></div>
+      <button class="btn" id="splitPlay">Play download</button>
+      <button class="btn ghost" id="splitReset">Reset</button>
+    </div>
+
+    <div class="demo fun">
+      <h3>Lab 6: hedge race at the tail</h3>
+      <p class="hint">Hedge starts only when zero pending blocks remain, attempts older than 2 s, max 2 hedges per block.</p>
+      <div class="race">
+        <div class="race-row"><span>Slow</span><div class="race-track"><div id="raceSlow"></div></div></div>
+        <div class="race-row"><span>Hedge</span><div class="race-track"><div id="raceFast"></div></div></div>
+      </div>
+      <button class="btn" id="racePlay">Play race</button>
+      <p class="note" id="raceNote">First to finish wins. Loser gets abort reason lost.</p>
+    </div>
+
+    <h3>Step D: torrent fetch (L7 swarm)</h3>
+    <p class="simple">Patched webtorrent routes every outbound TCP peer through connectRoute. New peer picks the network with fewest peers. Max 30 peers per net. Inbound peers map by localAddress. Piece bytes stay provisional until hash verifies, then credit splits proportionally across contributors.</p>
+    <div class="demo fun">
+      <h3>Lab 7: peer spreader</h3>
+      <button class="btn" id="peerAdd">Add peer</button>
+      <button class="btn ghost" id="peerReset">Reset</button>
+      <div class="peer-cols">
+        <div class="peer-col"><b>Wi-Fi peers</b><div id="peerWifi"></div></div>
+        <div class="peer-col"><b>Phone peers</b><div id="peerPhone"></div></div>
+      </div>
+      <p class="note">Faster net still wins more data naturally because each peer keeps a full request queue answered sooner.</p>
+    </div>
+  </section>
+
+  <section id="merge" class="paper">
+    <p class="sec-num">Section 3b: Deep merge (how two networks become one file)</p>
+    <h2>Merge is byte exact, not speed sum</h2>
+    <p class="simple">Speeds add. Bytes never double count. HTTP merge key is file offset. Torrent merge key is verified piece hash. Both keep per network tallies that always sum to the true total.</p>
+    <div class="demo fun">
+      <h3>Lab 8: HTTP offset merge</h3>
+      <p class="hint">Press Play merge. Wi-Fi takes even blocks, phone takes odd blocks. Watch frontier grow and per net counters stay exact.</p>
+      <div class="merge-file" id="mergeFile"></div>
+      <div class="merge-stats">
+        <span>Frontier: <b id="mergeFront">0</b> / 12 blocks</span>
+        <span>Wi-Fi bytes: <b id="mergeWifi">0</b></span>
+        <span>Phone bytes: <b id="mergePhone">0</b></span>
+      </div>
+      <button class="btn" id="mergePlay">Play merge</button>
+      <button class="btn ghost" id="mergeOverlap">Simulate overlap (hedge)</button>
+      <p class="note" id="mergeNote">Rule: frontier equals max progress, not sum. Overlap bytes count once. Code: advanceBlock and retractBlock in blockProgress.ts.</p>
+    </div>
+    <div class="demo fun">
+      <h3>Lab 9: torrent verify merge</h3>
+      <p class="hint">Unverified bytes are grey. Verified bytes lock with color. A bad hash would drop grey bytes back to zero.</p>
+      <div class="blocks" id="torrentPieces"></div>
+      <button class="btn" id="torrentPlay">Receive then verify</button>
+      <p class="note" id="torrentNote">State: provisionalBytes is live, bytesDownloaded is durable. Credit splits by share, remainder to largest share.</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Merge path</th><th>Unit</th><th>Write rule</th><th>Account rule</th></tr>
+        <tr><td>HTTP Range</td><td>block with rangeStart and rangeEnd</td><td>writer at start plus offset, flags r+, exact length or reject</td><td>advanceBlock frontier max, trim blamed tail on retract</td></tr>
+        <tr><td>Torrent</td><td>piece with fixed length</td><td>fs-chunk-store put, hash verify, then count</td><td>creditPiece proportional floor plus remainder to largest</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section id="conflicts" class="paper">
+    <p class="sec-num">Section 3c: Conflicts (what breaks and what Plexo does)</p>
+    <h2>Eight real conflicts, each with a fix</h2>
+    <p class="simple">Two networks sharing one wire is the most common trap. Click each card to see cause, sign, fix, and code pointer.</p>
+    <div class="conf-grid" id="confGrid"></div>
+    <div class="demo fun">
+      <h3>Lab 10: conflict picker</h3>
+      <label>Wi-Fi subnet</label>
+      <input type="text" id="cfgA" value="192.168.1.5/24">
+      <label>Phone subnet</label>
+      <input type="text" id="cfgB" value="192.168.1.27/24">
+      <button class="btn" id="cfgCheck">Check for clash</button>
+      <p class="note" id="cfgOut">Same /24 on both means same broadcast net. Plexo shows same subnet warning. Gain is suspect.</p>
+    </div>
+  </section>
+
+  <section id="runlive" class="paper">
+    <p class="sec-num">Section 3d: Run live</p>
+    <h2>Run the real app and change code live</h2>
+    <p class="simple">Two ways: click and run the packaged app, or run from source for live edits. Both are already prepared in this folder.</p>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Way</th><th>Path</th><th>Command</th></tr>
+        <tr><td>A: packaged app (fast)</td><td>CIE/plexo-app/plexo.AppImage (137 MB)</td><td>chmod +x then double click or run ./plexo.AppImage</td></tr>
+        <tr><td>B: live dev (edits reload)</td><td>/tmp/opencode/plexo-dev (no space path, electron present)</td><td>npm run dev, edit src/main, see logs with PLEXO_DEBUG=1</td></tr>
+        <tr><td>C: your clone</td><td>CIE/plexo</td><td>Copy to a path with no spaces if build fails on spaces</td></tr>
+      </table>
+    </div>
+    <div class="code-look"># A: run packaged build now
+./plexo-app/plexo.AppImage
+
+# B: live dev with hot reload (uses preinstalled copy without spaces)
+cd /tmp/opencode/plexo-dev
+npm run dev
+
+# B2: debug each request outcome
+PLEXO_DEBUG=1 npm run dev
+
+# C: if you must build in this folder, avoid spaces in path
+# copy CIE/plexo to ~/plexo-dev then npm install --ignore-scripts then npm run dev
+# full native rebuild needs make plus g++, missing on this Nix box, so AppImage is the safe run</div>
+    <p class="simple">Try live: open New Download, paste an https link, toggle Wi-Fi off mid flight, watch streams retire and blocks requeue with zero loss. Check manifest at userData downloads id manifest.json.</p>
+    <div class="demo fun">
+      <h3>Lab 11: speed limit backpressure (L4 window visual)</h3>
+      <label>Limit: <span id="bucketLabel">2 MB/s</span></label>
+      <input type="range" id="bucketRate" min="1" max="10" step="1" value="2">
+      <button class="btn" id="bucketSend">Receive 5 MB burst</button>
+      <div class="bucket"><div id="bucketFill"></div></div>
+      <p class="note" id="bucketNote">Bucket holds 1 second of tokens. Pause fills TCP window, sender slows, zero drops.</p>
+    </div>
+    <div class="demo fun">
+      <h3>Lab 12: browser handoff (ping, add, confirm)</h3>
+      <div class="bridge-steps">
+        <button class="btn bstep" data-b="0">1 ping 127.0.0.1:19288</button>
+        <button class="btn bstep" data-b="1">2 add plus probe</button>
+        <button class="btn bstep" data-b="2">3 confirm after erase</button>
+      </div>
+      <p class="note" id="bridgeNote">Press 1 to start. Host must match to stop DNS rebinding. JSON content type required.</p>
+    </div>
+  </section>
+
+  <section id="evidence" class="paper">
+    <p class="sec-num">Section 4: Evidence and evaluation</p>
+    <h2>Honest claims only</h2>
+    <p class="simple">No lab throughput numbers are claimed here. Claims below tie to code paths you can rerun with PLEXO_E2E knobs and PLEXO_DEBUG logs.</p>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Claim</th><th>Support</th><th>How to verify</th></tr>
+        <tr><td>Independent paths add throughput</td><td>Sum of TCP goodput minus overhead</td><td>Slider lab plus local HTTP server with throttled routes</td></tr>
+        <tr><td>Split is safe</td><td>206 plus Content-Range plus ETag plus exact length</td><td>Read chunkDownloader.ts attempt checks</td></tr>
+        <tr><td>Tail cannot stall file</td><td>Hedge max 2, refresh max 2, frontier max</td><td>Read scheduler.ts pickWork plus httpTransfer refresh</td></tr>
+        <tr><td>Shared router gives no gain</td><td>One bottleneck pipe</td><td>Same gateway test in conflict lab</td></tr>
+        <tr><td>Limits hold rate with no loss</td><td>Token bucket plus pause and resume</td><td>Bucket lab plus limits.ts take math</td></tr>
+      </table>
+    </div>
+    <h3>Tuning table from code</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Knob</th><th>Value</th><th>Reason</th></tr>
+        <tr><td>Block</td><td>1 to 8 MB</td><td>Tail cost cap versus request storm</td></tr>
+        <tr><td>Streams</td><td>start 8, max 32</td><td>AIMD style double on health, cut on refusal</td></tr>
+        <tr><td>Stall</td><td>20 s no data</td><td>Silent socket is dead, retry it</td></tr>
+        <tr><td>Eyeballs gap</td><td>250 ms</td><td>RFC 8305 race cost</td></tr>
+        <tr><td>Backoff</td><td>1 s double to 15 s plus jitter</td><td>No thundering herd</td></tr>
+        <tr><td>Peers per net</td><td>30</td><td>Choice without socket flood</td></tr>
+        <tr><td>Tick, paint, checkpoint</td><td>500 ms, 200 ms, 15 s</td><td>Control, UI, fsync separation</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section id="roadmap" class="paper">
+    <p class="sec-num">Section 5: Conclusion and roadmap</p>
+    <h2>Merge at L7, pin at L4, steer at L3, observe L2 and L1</h2>
+    <p class="simple">That one line is the whole design. Plexo never claims magic. If paths share a bottleneck, it says so. If a server refuses split, it falls back to one stream.</p>
+    <h3>Next tests</h3>
+    <ol class="clean">
+      <li>Throughput: Wi-Fi plus USB tether, 100 MB to 1 GB, Plexo on versus off.</li>
+      <li>Failover: unplug mid file, measure stall gap and resume offset.</li>
+      <li>Fairness: 4 concurrent downloads sharing 32 streams per net.</li>
+      <li>Power: socket count versus battery drain on laptop.</li>
+    </ol>
+    <h3>Glossary with layers</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Term</th><th>Layer</th><th>Meaning</th></tr>
+        <tr><td>HTTP Range, 206, Content-Range</td><td>L7</td><td>Ask part, get part plus proof of position</td></tr>
+        <tr><td>BitTorrent piece, bitfield, have</td><td>L7</td><td>Swarm units plus have map plus hash gate</td></tr>
+        <tr><td>TLS cert, SNI, resume</td><td>L6</td><td>Lock plus identity plus fast resume</td></tr>
+        <tr><td>TCP segment, seq, ack, window</td><td>L4</td><td>Reliable stream plus ordering plus flow cap</td></tr>
+        <tr><td>IPv4, IPv6, CIDR, gateway, NAT</td><td>L3</td><td>Address plus route plus rewrite at home router</td></tr>
+        <tr><td>MAC, ARP, MTU, frame</td><td>L2</td><td>Local delivery plus size cap 1500 typical</td></tr>
+        <tr><td>Modulation, bits</td><td>L1</td><td>Air and wire physics, outside app control</td></tr>
+      </table>
+    </div>
+    <h3>References</h3>
+    <ol class="clean small">
+      <li>Local clone CIE/plexo: interfaces.ts, deviceBinding.ts, routes.ts, probe.ts, plan.ts, chunkDownloader.ts, scheduler.ts, httpTransfer.ts, concurrency.ts, transfer.ts, downloadManager.ts, limits.ts, torrent engine and transfer, patches webtorrent connect hook.</li>
+      <li>RFC 9110 HTTP Semantics, Range Requests and 206 behavior.</li>
+      <li>RFC 8305 Happy Eyeballs version 2, 250 ms race.</li>
+      <li>RFC 6265 Cookies, domain and path match.</li>
+      <li>BitTorrent protocol and DHT specs, piece hashing.</li>
+      <li>Electron IPC, safeStorage, powerMonitor docs.</li>
+    </ol>
+    <div class="plain-box">
+      <h2>Known gaps</h2>
+      <p class="simple">No measured gain numbers ship with this paper. No carrier tests. Repro path: packaged AppImage for behavior, plus /tmp/opencode/plexo-dev with npm run dev and PLEXO_DEBUG=1 for internals, plus PLEXO_E2E_INTERFACES for fake nets.</p>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <p>Fun style on purpose. Open index.html directly. No build needed. App lives in plexo-app. Live code lives in /tmp/opencode/plexo-dev.</p>
+    <p><a href="#" id="toTop">Back to top</a></p>
+  </footer>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

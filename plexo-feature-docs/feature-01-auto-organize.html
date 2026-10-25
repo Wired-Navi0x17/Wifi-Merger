@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Plexo CIE Feature Report 01: Automatic File Organization</title>
+        <style>
+            @page {
+                size: A4;
+                margin: 18mm 16mm 18mm 16mm;
+            }
+            * {
+                box-sizing: border-box;
+            }
+            body {
+                font-family: Georgia, 'Times New Roman', serif;
+                color: #111;
+                line-height: 1.55;
+                margin: 0;
+            }
+            .page {
+                max-width: 720px;
+                margin: 0 auto;
+                padding: 24px 8px 48px;
+            }
+            header.cover {
+                text-align: center;
+                border-bottom: 3px double #111;
+                padding-bottom: 16px;
+                margin-bottom: 18px;
+            }
+            header.cover h1 {
+                font-size: 26px;
+                margin: 8px 0;
+            }
+            header.cover h2 {
+                font-size: 16px;
+                font-weight: normal;
+                margin: 4px 0;
+            }
+            .meta {
+                font-size: 13px;
+                color: #333;
+            }
+            h2.sec {
+                font-size: 18px;
+                border-bottom: 1px solid #111;
+                padding-bottom: 4px;
+                margin-top: 28px;
+            }
+            h3 {
+                font-size: 15px;
+                margin-bottom: 4px;
+            }
+            p,
+            li {
+                font-size: 14px;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 13px;
+                margin: 10px 0;
+            }
+            th,
+            td {
+                border: 1px solid #555;
+                padding: 6px 8px;
+                text-align: left;
+                vertical-align: top;
+            }
+            th {
+                background: #eee;
+            }
+            code {
+                font-family: Consolas, monospace;
+                font-size: 12px;
+                background: #f4f4f4;
+                padding: 1px 4px;
+            }
+            pre {
+                background: #f4f4f4;
+                padding: 10px;
+                font-size: 12px;
+                overflow-x: auto;
+                border: 1px solid #999;
+            }
+            figure.flow {
+                border: 1px solid #111;
+                padding: 12px;
+                margin: 12px 0;
+                text-align: center;
+            }
+            figure.flow svg {
+                max-width: 100%;
+                height: auto;
+            }
+            figcaption {
+                font-size: 12px;
+                color: #333;
+                margin-top: 6px;
+            }
+            .note {
+                background: #f9f9e8;
+                border: 1px solid #999;
+                padding: 8px 10px;
+                font-size: 13px;
+            }
+            footer {
+                margin-top: 28px;
+                border-top: 1px solid #111;
+                padding-top: 8px;
+                font-size: 12px;
+                color: #333;
+            }
+            @media print {
+                .page {
+                    padding: 0;
+                }
+                .noprint {
+                    display: none;
+                }
+                h2.sec {
+                    page-break-after: avoid;
+                }
+                table,
+                figure.flow,
+                pre {
+                    page-break-inside: avoid;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="page">
+            <header class="cover">
+                <div class="meta">
+                    CS2403 Computer Networks, Continuous Internal Evaluation (CIE)
+                </div>
+                <h1>Plexo Feature Report 01:<br />Automatic File Organization by Type</h1>
+                <h2>
+                    Single-file HTTP downloads are sorted into category folders at download time,
+                    with user-customizable buckets and two ways to sort a folder that already has
+                    loose files: a button in the app and a Python script.
+                </h2>
+                <div class="meta">
+                    Version 1.1, 2026-10-17. Scope: HTTP single-file downloads only. Torrents are
+                    excluded from organizing by design. Supersedes version 1.0 of 2026-10-16.
+                </div>
+            </header>
+
+            <div class="noprint note">
+                Print instruction: open this file in a browser and press Print to PDF, A4, margins
+                default, background graphics on. This banner does not print.
+            </div>
+
+            <h2 class="sec">1. Executive summary</h2>
+            <p>
+                <strong>Problem.</strong> Every Plexo download landed flat in one destination
+                folder. Documents, videos, archives and installers piled together, and the user
+                sorted them by hand.
+            </p>
+            <p>
+                <strong>Solution.</strong> Feature 1 adds automatic file organization. At download
+                start the engine resolves a category folder from the file extension (for example
+                <code>Videos/</code> for <code>.mp4</code>), creates it on demand inside the picked
+                destination, and claims the final name there. In the <strong>Auto organize</strong>
+                dialog (Downloads screen) users can rename buckets, edit extension lists, point a
+                bucket at a custom folder, switch organizing off globally, and press
+                <strong>Organize a folder now</strong> to sort files that are already sitting in a
+                folder. The same rules are available from the command line through
+                <code>scripts/organize.py</code>, and the app passes its current buckets to the
+                script so a renamed bucket sorts the same way everywhere.
+            </p>
+            <p>
+                <strong>Result.</strong> New downloads arrive pre-sorted, and existing messy folders
+                are fixed either from the dialog or with one scan command. Verification: three
+                Playwright organization tests pass (organized landing, per-download opt-out, preview
+                without downloading), the 20-test engine suite and the 10-test UI suite still pass,
+                Python and TypeScript collision rules were checked for parity, and all four
+                typecheck projects exit 0.
+            </p>
+
+            <h2 class="sec">2. What is new</h2>
+            <h3>2.1 Default buckets</h3>
+            <table>
+                <tr>
+                    <th>Category</th>
+                    <th>Default folder</th>
+                    <th>Extensions</th>
+                </tr>
+                <tr>
+                    <td>Documents</td>
+                    <td><code>&lt;destination&gt;/Documents/</code></td>
+                    <td>pdf, doc, docx, txt, md, rtf, odt, xls, xlsx, ppt, pptx, csv</td>
+                </tr>
+                <tr>
+                    <td>Videos</td>
+                    <td><code>&lt;destination&gt;/Videos/</code></td>
+                    <td>mp4, mkv, mov, avi, webm</td>
+                </tr>
+                <tr>
+                    <td>Archives</td>
+                    <td><code>&lt;destination&gt;/Archives/</code></td>
+                    <td>zip, rar, 7z, tar, gz</td>
+                </tr>
+                <tr>
+                    <td>Programs</td>
+                    <td><code>&lt;destination&gt;/Programs/</code></td>
+                    <td>exe, msi, dmg, deb, rpm, appimage</td>
+                </tr>
+                <tr>
+                    <td>Others</td>
+                    <td><code>&lt;destination&gt;/Others/</code></td>
+                    <td>catch-all: unknown or missing extensions</td>
+                </tr>
+            </table>
+            <h3>2.2 User control</h3>
+            <ul>
+                <li>
+                    Global on/off switch in the <strong>Auto organize</strong> dialog (Downloads
+                    screen).
+                </li>
+                <li>
+                    Rename buckets: each bucket has a <strong>Name</strong> field (1 to 40
+                    characters). The name is also the default subfolder name, so renaming Videos to
+                    Clips sends new videos to <code>Clips/</code>.
+                </li>
+                <li>
+                    Per-category extension editing (comma separated, case-insensitive, leading dots
+                    stripped; up to 64 extensions of up to 16 characters each).
+                </li>
+                <li>
+                    Per-category custom folder: blank means the default subfolder; absolute path
+                    moves that bucket elsewhere.
+                </li>
+                <li>
+                    <strong>Organize a folder now</strong> button: pick any folder, Plexo runs the
+                    scan with your current buckets and reports how many files moved.
+                </li>
+                <li>
+                    Per-download override in New Download: checkbox plus live preview of the final
+                    path (for example <code>.../Videos/demo.mp4</code>). Torrents show no organize
+                    row.
+                </li>
+                <li>Reset to defaults button restores the table above.</li>
+            </ul>
+
+            <h2 class="sec">3. Background (short network context)</h2>
+            <p>
+                Plexo is an Application layer (OSI L7) download manager that multiplies throughput
+                with many Transport layer (L4) TCP connections pinned to distinct Network layer (L3)
+                paths. This feature sits above that engine: it does not change how bytes arrive,
+                only where finished files land. The split, hedge, peer spread, and speed limit
+                machinery are untouched. The hook point is narrow: destination resolution at
+                download start, plus a post-hoc batch mover.
+            </p>
+
+            <h2 class="sec">4. How it works</h2>
+            <figure class="flow">
+                <svg
+                    viewBox="0 0 640 170"
+                    xmlns="http://www.w3.org/2000/svg"
+                    font-family="Georgia, serif"
+                    font-size="12"
+                >
+                    <rect
+                        x="8"
+                        y="20"
+                        width="110"
+                        height="60"
+                        fill="#fff"
+                        stroke="#111"
+                        stroke-width="2"
+                    />
+                    <text x="63" y="45" text-anchor="middle">New Download</text>
+                    <text x="63" y="62" text-anchor="middle">name + dest</text>
+                    <rect
+                        x="138"
+                        y="20"
+                        width="110"
+                        height="60"
+                        fill="#fff"
+                        stroke="#111"
+                        stroke-width="2"
+                    />
+                    <text x="193" y="45" text-anchor="middle">Resolver (TS)</text>
+                    <text x="193" y="62" text-anchor="middle">ext to bucket</text>
+                    <rect
+                        x="268"
+                        y="20"
+                        width="110"
+                        height="60"
+                        fill="#fff"
+                        stroke="#111"
+                        stroke-width="2"
+                    />
+                    <text x="323" y="45" text-anchor="middle">Reserve name</text>
+                    <text x="323" y="62" text-anchor="middle">in bucket dir</text>
+                    <rect
+                        x="398"
+                        y="20"
+                        width="110"
+                        height="60"
+                        fill="#fff"
+                        stroke="#111"
+                        stroke-width="2"
+                    />
+                    <text x="453" y="45" text-anchor="middle">Download</text>
+                    <text x="453" y="62" text-anchor="middle">unchanged</text>
+                    <rect
+                        x="528"
+                        y="20"
+                        width="104"
+                        height="60"
+                        fill="#fff"
+                        stroke="#111"
+                        stroke-width="2"
+                    />
+                    <text x="580" y="45" text-anchor="middle">Publish</text>
+                    <text x="580" y="62" text-anchor="middle">history</text>
+                    <rect
+                        x="198"
+                        y="105"
+                        width="250"
+                        height="45"
+                        fill="#f9f9e8"
+                        stroke="#111"
+                        stroke-width="2"
+                    />
+                    <text x="323" y="124" text-anchor="middle">
+                        Python scan (existing folders)
+                    </text>
+                    <text x="323" y="140" text-anchor="middle">same buckets, same collisions</text>
+                    <line x1="118" y1="50" x2="138" y2="50" stroke="#111" stroke-width="2" />
+                    <line x1="248" y1="50" x2="268" y2="50" stroke="#111" stroke-width="2" />
+                    <line x1="378" y1="50" x2="398" y2="50" stroke="#111" stroke-width="2" />
+                    <line x1="508" y1="50" x2="528" y2="50" stroke="#111" stroke-width="2" />
+                </svg>
+                <figcaption>
+                    Figure 1. New downloads resolve the bucket up front so staging, free-space
+                    checks, and history all use the organized path. The scan (button or script)
+                    applies identical rules to loose files later.
+                </figcaption>
+            </figure>
+            <h3>4.1 Resolution rules (TypeScript, <code>src/main/download/organize.ts</code>)</h3>
+            <ul>
+                <li>
+                    Extension is lowercased text after the last dot;
+                    <code>archive.tar.gz</code> maps to <code>gz</code>; dotfiles and trailing dots
+                    map to the catch-all bucket.
+                </li>
+                <li>
+                    First matching bucket in order wins. The catch-all is the first bucket with an
+                    empty extension list (Others by default), falling back to the last bucket in the
+                    list if the user deleted it.
+                </li>
+                <li>
+                    Folder override: absolute paths stay absolute; plain names become subfolders of
+                    the destination; <code>..</code> escapes and illegal names fall back to the
+                    default label folder.
+                </li>
+                <li>
+                    The bucket folder is created on demand (with the same helper downloads use),
+                    free space is checked there, and the existing name claim runs inside that folder,
+                    so collisions (<code>name (1)</code>) and staging (<code>.plexo</code>) behave
+                    exactly as before.
+                </li>
+                <li>
+                    The download manager decides per download:
+                    <code>organize = request.organize ?? settings.autoOrganize.enabled ?? true</code
+                    >, so a fresh install organizes by default and the New Download checkbox wins
+                    over the global switch.
+                </li>
+            </ul>
+            <h3>4.2 Python automation (<code>scripts/organize.py</code>, stdlib only)</h3>
+            <ul>
+                <li>
+                    <code>--dry-run --base-dir DIR --filename NAME</code> prints the computed JSON
+                    target, used by tests and mirrors.
+                </li>
+                <li>
+                    <code>--move PATH [--base-dir DIR]</code> moves one finished file into its
+                    bucket with the same collision loop.
+                </li>
+                <li>
+                    <code>--scan DIR [--config FILE]</code> sorts every loose file at the top level
+                    of a folder; <code>*.plexo</code> staging files are never touched, and
+                    directories are left alone.
+                </li>
+                <li>
+                    <code>--config</code> takes <code>{"categories": [...]}</code>. The app uses
+                    this: pressing <strong>Organize a folder now</strong> writes the user's current
+                    buckets to a temp file and passes it, so renames, custom folders and edited
+                    extension lists apply. Without a config the script's built-in defaults (the
+                    table above) are used.
+                </li>
+                <li>
+                    Collision parity with the TypeScript claim (<code>paths.ts</code>
+                    <code>claimName</code>): only the last extension is kept last
+                    (<code>a.tar.gz</code> becomes <code>a.tar (1).gz</code>), and an extension
+                    longer than 32 bytes is treated as part of the name.
+                </li>
+            </ul>
+            <h3>4.3 Settings, IPC, and UI</h3>
+            <ul>
+                <li>
+                    Settings live in <code>app-settings.json</code> (under the OS user data folder)
+                    as <code>AppSettings.autoOrganize</code>. Validation is per entry: a bucket id
+                    must be 1 to 32 lowercase letters, digits or dashes, a name 1 to 40 characters
+                    after trimming, extensions become unique lowercased tokens, a relative folder
+                    must match <code>[A-Za-z0-9 _.-]</code> up to 64 characters, an absolute folder
+                    up to 512. A bad entry only loses itself, never the whole block.
+                </li>
+                <li>
+                    IPC: <code>organize:preview-path</code> (pure preview, returns the predicted
+                    path or null) and <code>organize:folder-now</code> (runs the scan, returns
+                    <code>{count}</code>), plus typed preload bindings; start requests carry an
+                    optional per-download <code>organize</code> flag.
+                </li>
+                <li>
+                    UI: <code>OrganizeDialog.tsx</code> (draft on open, single save, rename field,
+                    scan button), New Download checkbox with live preview, store field
+                    <code>autoOrganize</code> seeded from <code>InitialState</code>.
+                </li>
+            </ul>
+
+            <h2 class="sec">5. Evidence and verification</h2>
+            <table>
+                <tr>
+                    <th>Check</th>
+                    <th>Command / how</th>
+                    <th>Observed</th>
+                </tr>
+                <tr>
+                    <td>Organized download end to end</td>
+                    <td><code>e2e/organize.spec.ts</code>: organized download lands in its bucket</td>
+                    <td>PASS (3 of 3 tests in the file)</td>
+                </tr>
+                <tr>
+                    <td>Per-download opt-out</td>
+                    <td>same file: opted-out download stays flat</td>
+                    <td>PASS</td>
+                </tr>
+                <tr>
+                    <td>Preview without downloading</td>
+                    <td>same file: preview predicts the bucket</td>
+                    <td>PASS</td>
+                </tr>
+                <tr>
+                    <td>Engine regression</td>
+                    <td><code>e2e/download.spec.ts</code> (organizing pinned off in fixtures)</td>
+                    <td>20 of 20 pass</td>
+                </tr>
+                <tr>
+                    <td>UI regression</td>
+                    <td><code>e2e/ui.spec.ts</code></td>
+                    <td>10 of 10 pass</td>
+                </tr>
+                <tr>
+                    <td>Dialog check (rename and scan)</td>
+                    <td>Playwright: open Auto organize, edit first Name field, find scan button</td>
+                    <td>PASS (field shows Documents, edited, button present)</td>
+                </tr>
+                <tr>
+                    <td>Python preview</td>
+                    <td><code>organize.py --dry-run --filename demo.mp4</code></td>
+                    <td><code>Videos/demo.mp4</code>, category videos</td>
+                </tr>
+                <tr>
+                    <td>Python case handling</td>
+                    <td><code>--filename paper.PDF</code>, <code>noext</code></td>
+                    <td>Documents and Others respectively</td>
+                </tr>
+                <tr>
+                    <td>Python batch scan</td>
+                    <td><code>--scan</code> with mp4, pdf, extensionless</td>
+                    <td>3 moved into Videos, Documents, Others; count 3</td>
+                </tr>
+                <tr>
+                    <td>Config honored by the scan</td>
+                    <td><code>--scan DIR --config FILE</code> with a one-bucket config</td>
+                    <td>mp4 matched Videos; unmatched names fell to the last bucket, matching the TS fallback</td>
+                </tr>
+                <tr>
+                    <td>Collision parity</td>
+                    <td>Python <code>free_name</code> checks</td>
+                    <td><code>a.tar.gz</code> gives <code>a.tar (1).gz</code>; <code>noext</code> gives <code>noext (1)</code></td>
+                </tr>
+                <tr>
+                    <td>TypeScript compile</td>
+                    <td><code>npm run typecheck</code> (node, web, e2e, extension)</td>
+                    <td>All four exit 0; ESLint and Prettier clean</td>
+                </tr>
+            </table>
+            <p class="note">
+                Live download test procedure (for the demo machine): start a small MP4 and a PDF
+                with organizing on, confirm paths <code>.../Videos/</code> and
+                <code>.../Documents/</code>; repeat with organizing off and confirm flat layout; set
+                a custom Videos folder and confirm redirect. Then press Organize a folder now on a
+                prepared messy folder and confirm the moved count.
+            </p>
+
+            <h2 class="sec">6. Limitations and roadmap</h2>
+            <ul>
+                <li>
+                    Torrents are excluded by requirement; multi-file folder classification is future
+                    work.
+                </li>
+                <li>
+                    Classification is by extension only, not by file content sniffing; a misnamed
+                    file follows its suffix.
+                </li>
+                <li>
+                    The scan sorts the top level of the chosen folder only; it does not descend into
+                    subfolders.
+                </li>
+                <li>
+                    Custom absolute folders are trusted as typed (up to 512 characters); network
+                    drives must be mounted first (existing destination check applies).
+                </li>
+                <li>
+                    Roadmap slots: content-aware buckets, per-site rules, scheduled tidy runs, an
+                    undo log for batch scans, scanning subfolders.
+                </li>
+            </ul>
+
+            <h2 class="sec">7. References and files changed</h2>
+            <ul>
+                <li>Repo: local clone <code>CIE/plexo</code> (fork of upstream Plexo).</li>
+                <li>
+                    New: <code>src/main/download/organize.ts</code>,
+                    <code>scripts/organize.py</code>,
+                    <code>src/renderer/src/components/OrganizeDialog.tsx</code>,
+                    <code>e2e/organize.spec.ts</code>, this report.
+                </li>
+                <li>
+                    Modified: <code>src/shared/types.ts</code>,
+                    <code>src/shared/ipc-channels.ts</code>,
+                    <code>src/shared/ipc-contract.ts</code>, <code>src/main/settings.ts</code>,
+                    <code>src/main/download/downloadManager.ts</code>,
+                    <code>src/main/ipc/handlers.ts</code>, <code>src/preload/index.ts</code>,
+                    <code>src/renderer/src/store/useAppStore.ts</code>,
+                    <code>src/renderer/src/components/NewDownloadDialog.tsx</code>,
+                    <code>src/renderer/src/screens/DownloadsScreen.tsx</code>,
+                    <code>e2e/fixtures.ts</code> (organize isolation and flat default).
+                </li>
+            </ul>
+
+            <h2 class="sec">Appendix A. Demo script (5 minutes)</h2>
+            <ol>
+                <li>
+                    Open Downloads, press <strong>Auto organize</strong>, confirm defaults and
+                    enabled.
+                </li>
+                <li>
+                    Rename the Videos bucket to Clips in the Name field, press Save, reopen the
+                    dialog and show the name stuck.
+                </li>
+                <li>
+                    New Download an MP4 link, note preview <code>.../Clips/&lt;name&gt;</code>,
+                    start, show the file in the folder.
+                </li>
+                <li>Repeat with a PDF, note <code>.../Documents/</code>.</li>
+                <li>Uncheck organize on a third download, note flat save.</li>
+                <li>
+                    Prepare a messy folder, press <strong>Organize a folder now</strong>, show the
+                    moved count and the sorted result (the button uses your current buckets, so the
+                    Clips rename applies). Optionally show the CLI:
+                    <code>python3 scripts/organize.py --scan ~/Downloads/messy</code>.
+                </li>
+            </ol>
+
+            <h2 class="sec">Appendix B. Default configuration (JSON)</h2>
+            <p>
+                Stored under the <code>autoOrganize</code> key of
+                <code>app-settings.json</code> in the OS user data folder.
+            </p>
+            <pre>
+{
+  "enabled": true,
+  "categories": [
+    {"id": "documents", "label": "Documents",
+     "extensions": ["pdf","doc","docx","txt","md","rtf","odt","xls","xlsx","ppt","pptx","csv"]},
+    {"id": "videos", "label": "Videos",
+     "extensions": ["mp4","mkv","mov","avi","webm"]},
+    {"id": "archives", "label": "Archives",
+     "extensions": ["zip","rar","7z","tar","gz"]},
+    {"id": "programs", "label": "Programs",
+     "extensions": ["exe","msi","dmg","deb","rpm","appimage"]},
+    {"id": "others", "label": "Others", "extensions": []}
+  ]
+}</pre
+            >
+
+            <footer>
+                Prepared for class handout. Print to PDF for submission. Feature code lives in the
+                working tree listed above; run <code>npm run typecheck</code> to re-verify.
+            </footer>
+        </div>
+    </body>
+</html>

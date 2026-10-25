@@ -1,0 +1,354 @@
+@import 'tailwindcss';
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('./fonts/Manrope-Variable.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Roboto Mono';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('./fonts/RobotoMono-Variable.woff2') format('woff2');
+}
+
+/* Feature 3: sharp, translucent look. Corner radius is 0 everywhere (the switch knob stays a
+   circle because it is a knob), the palette is graphite plus signal cyan, and every surface has
+   a solid value beside a glass value so the three window material levels can swap between them.
+   See plexo-feature-docs/feature-03-04-ui-plan.html for the design this implements. */
+:root {
+  color-scheme: light dark;
+
+  --bg: #f2f5f8;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #eef2f6;
+  --input-bg: #ffffff;
+  --track-bg: #e3e8ee;
+
+  --text: #0f151b;
+  --text-secondary: #4c5866;
+  --text-tertiary: #6b7784;
+
+  --border: #dbe2ea;
+  --border-subtle: #e8edf3;
+  --border-strong: #b6c0cc;
+  --footer-border: #d5dde6;
+
+  --icon-muted: #c3ccd6;
+  --icon-muted-strong: #aab5c1;
+  --scrollbar-thumb: #cbd4de;
+
+  --checkbox-shadow: rgba(0, 0, 0, 0.15);
+  --checkbox-inset-shadow: rgba(0, 0, 0, 0.04);
+
+  --hero-bg: linear-gradient(180deg, #fbfdfe 0%, #eef3f8 100%);
+  --hero-border: #dae3ec;
+
+  /* Glass values (Feature 3). Solid levels never read them; the material rules below swap the
+     normal surface tokens over to these, and the backdrop-filter rules do the blurring. */
+  --panel-glass: rgba(255, 255, 255, 0.72);
+  --panel-glass-2: rgba(255, 255, 255, 0.55);
+  --canvas-glass: rgba(242, 245, 248, 0.82);
+  --canvas-backdrop:
+    radial-gradient(900px 420px at 12% -10%, rgba(11, 127, 168, 0.1), transparent 60%),
+    radial-gradient(700px 380px at 95% 12%, rgba(108, 90, 196, 0.08), transparent 60%),
+    linear-gradient(180deg, #f6f9fc 0%, #eef3f8 100%);
+  --glass-blur: 22px;
+  --glass-blur-window: 30px;
+
+  /* Network + brand palette — light-mode originals, adapted to sit on a cool paper ground. */
+  --color-wifi: #0f8a74;
+  --color-wifi-bg: #e6f6f2;
+  --color-wifi-border: #b8e6dc;
+  --color-wifi-text: #0c6b5a;
+  --color-wifi-onsolid: #ffffff;
+
+  --color-usb: #b97a0a;
+  --color-usb-bg: #fdf3dd;
+  --color-usb-border: #f5dfae;
+  --color-usb-text: #8a5c08;
+  --color-usb-onsolid: #ffffff;
+
+  --color-ethernet: #4a63a8;
+  --color-ethernet-bg: #eceff8;
+  --color-ethernet-border: #c9d2ea;
+  --color-ethernet-text: #3a4f88;
+  --color-ethernet-onsolid: #ffffff;
+
+  --color-neutral: #64707d;
+  --color-neutral-bg: #f1f4f7;
+  --color-neutral-border: #e2e8ee;
+  --color-neutral-text: #4c5866;
+  --color-neutral-onsolid: #ffffff;
+
+  /* Network colors a user can pick (theme.ts NETWORK_COLOR_SWATCHES): deep enough on paper for a
+     white glyph, as the kinds' are. Teal, amber and steel are the kinds' own. */
+  --swatch-teal: #0f8a74;
+  --swatch-teal-onsolid: #ffffff;
+  --swatch-amber: #b97a0a;
+  --swatch-amber-onsolid: #ffffff;
+  --swatch-steel: #4a63a8;
+  --swatch-steel-onsolid: #ffffff;
+  --swatch-rose: #b5525a;
+  --swatch-rose-onsolid: #ffffff;
+  --swatch-violet: #6c5ac4;
+  --swatch-violet-onsolid: #ffffff;
+  --swatch-lime: #5b8a1e;
+  --swatch-lime-onsolid: #ffffff;
+  --swatch-cyan: #0e7d93;
+  --swatch-cyan-onsolid: #ffffff;
+  --swatch-coral: #c4572a;
+  --swatch-coral-onsolid: #ffffff;
+
+  --color-accent: #0b7fa8;
+  --color-accent-onsolid: #ffffff;
+  --color-success: #0e8a63;
+
+  --color-danger: #c23b3b;
+  --color-danger-bg: #fdf1f1;
+  --color-danger-border: #f5c9c9;
+
+  /* Throughput chart's total-line color — readable without being a harsh axis line. */
+  --node-accent: #5d6b78;
+
+  /* Shared corner radius for shadcn/Base UI components: sharp on purpose (Feature 3). */
+  --radius: 0px;
+}
+
+/* Maps shadcn/Base UI's expected semantic tokens onto Plexo's existing palette above, instead of
+   introducing a second, parallel color system. Tailwind only generates `bg-primary`-style
+   utilities for names declared here, in `@theme`, so this can freely reuse Plexo's own custom
+   property *values* (e.g. --color-accent) without colliding with their names. */
+@theme inline {
+  --font-sans: 'Manrope', -apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, sans-serif;
+  --font-mono: 'Roboto Mono', 'SF Mono', ui-monospace, Menlo, monospace;
+
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-card: var(--bg-secondary);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--bg-secondary);
+  --color-popover-foreground: var(--text);
+  --color-primary: var(--color-accent);
+  --color-primary-foreground: var(--color-accent-onsolid);
+  --color-secondary: var(--bg-tertiary);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--track-bg);
+  --color-muted-foreground: var(--text-tertiary);
+  --color-destructive: var(--color-danger);
+  --color-border: var(--border);
+  /* Not --input-bg: that's a fill color (white in light mode), invisible as a stroke.
+     border-input needs an actual visible border tone. */
+  --color-input: var(--border-strong);
+  --color-ring: var(--color-accent);
+
+  /* All zero: the whole scale is sharp. Kept as a scale so components that ask for sm/md/lg/xl
+     still resolve, they just resolve to a square. */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --hero-bg: linear-gradient(180deg, #121922 0%, #0e141b 100%);
+    --hero-border: #1e2833;
+    /* Graphite instrument-panel background. */
+    --bg: #0c1015;
+    --bg-secondary: #161d26;
+    --bg-tertiary: #1b232c;
+    --input-bg: rgba(0, 0, 0, 0.25);
+    --track-bg: rgba(255, 255, 255, 0.08);
+
+    --text: #e7edf3;
+    --text-secondary: #a6b0ba;
+    --text-tertiary: #8f99a3;
+
+    --border: rgba(255, 255, 255, 0.09);
+    --border-subtle: rgba(255, 255, 255, 0.05);
+    --border-strong: rgba(255, 255, 255, 0.2);
+    --footer-border: rgba(255, 255, 255, 0.09);
+
+    --icon-muted: rgba(255, 255, 255, 0.18);
+    --icon-muted-strong: rgba(255, 255, 255, 0.26);
+    --scrollbar-thumb: rgba(255, 255, 255, 0.22);
+
+    --checkbox-shadow: rgba(0, 0, 0, 0.4);
+    --checkbox-inset-shadow: rgba(0, 0, 0, 0.3);
+
+    --panel-glass: rgba(24, 31, 40, 0.66);
+    --panel-glass-2: rgba(30, 38, 48, 0.5);
+    --canvas-glass: rgba(12, 16, 21, 0.72);
+    --canvas-backdrop:
+      radial-gradient(900px 420px at 10% -12%, rgba(53, 199, 245, 0.1), transparent 60%),
+      radial-gradient(760px 400px at 96% 8%, rgba(124, 92, 255, 0.1), transparent 62%),
+      linear-gradient(180deg, #0f141b 0%, #0b0f14 100%);
+
+    --color-wifi: #57c9b5;
+    --color-wifi-bg: rgba(87, 201, 181, 0.14);
+    --color-wifi-border: rgba(87, 201, 181, 0.38);
+    --color-wifi-text: #7fd9c7;
+    --color-wifi-onsolid: #06201b;
+
+    --color-usb: #e0b25c;
+    --color-usb-bg: rgba(224, 178, 92, 0.14);
+    --color-usb-border: rgba(224, 178, 92, 0.38);
+    --color-usb-text: #ecc37e;
+    --color-usb-onsolid: #241804;
+
+    --color-ethernet: #8fa7d6;
+    --color-ethernet-bg: rgba(143, 167, 214, 0.14);
+    --color-ethernet-border: rgba(143, 167, 214, 0.38);
+    --color-ethernet-text: #a9bde5;
+    --color-ethernet-onsolid: #0b1220;
+
+    --color-neutral: #8f99a3;
+    --color-neutral-bg: rgba(143, 153, 163, 0.14);
+    --color-neutral-border: rgba(143, 153, 163, 0.35);
+    --color-neutral-text: #a6b0ba;
+    --color-neutral-onsolid: #12171c;
+
+    --swatch-teal: #57c9b5;
+    --swatch-teal-onsolid: #06201b;
+    --swatch-amber: #e0b25c;
+    --swatch-amber-onsolid: #241804;
+    --swatch-steel: #8fa7d6;
+    --swatch-steel-onsolid: #0b1220;
+    --swatch-rose: #e08f8f;
+    --swatch-rose-onsolid: #26100f;
+    --swatch-violet: #a99ce0;
+    --swatch-violet-onsolid: #17132a;
+    --swatch-lime: #a8cc6e;
+    --swatch-lime-onsolid: #121c08;
+    --swatch-cyan: #6fd0e6;
+    --swatch-cyan-onsolid: #04202a;
+    --swatch-coral: #e59a72;
+    --swatch-coral-onsolid: #241209;
+
+    --color-accent: #35c7f5;
+    --color-accent-onsolid: #052230;
+    --color-success: #3ddc97;
+
+    --color-danger: #ff7a7a;
+    --color-danger-bg: rgba(255, 122, 122, 0.12);
+    --color-danger-border: rgba(255, 122, 122, 0.4);
+
+    --node-accent: #e7edf3;
+  }
+}
+
+/* Feature 3: window material levels. The root carries data-material, set once from the saved
+   setting and updated live from the Material toggle. Level solid changes nothing; panels swap
+   card and popover surfaces over to their glass values and blur what is behind them; desktop
+   also turns the canvas itself translucent (the Electron window is transparent, so the desktop
+   shows through where blur is supported). */
+html[data-material='panels'],
+html[data-material='desktop'] {
+  --bg-secondary: var(--panel-glass);
+  --bg-tertiary: var(--panel-glass-2);
+}
+
+html[data-material='panels'] [class~='bg-card'],
+html[data-material='panels'] [class~='bg-secondary'],
+html[data-material='panels'] [class~='bg-popover'],
+html[data-material='desktop'] [class~='bg-card'],
+html[data-material='desktop'] [class~='bg-secondary'],
+html[data-material='desktop'] [class~='bg-popover'] {
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+}
+
+html[data-material='panels'] body {
+  background-image: var(--canvas-backdrop);
+}
+
+html[data-material='desktop'] {
+  --bg: var(--canvas-glass);
+}
+
+html[data-material='desktop'] body {
+  background-image: var(--canvas-backdrop);
+  backdrop-filter: blur(var(--glass-blur-window)) saturate(150%);
+}
+
+/* Layered, not plain global CSS, so Tailwind utility classes still win over these resets.
+   Tailwind puts its own utilities in a later layer than base styles, and unlayered CSS beats
+   every layer regardless of specificity, so an unlayered button font reset here previously
+   overrode every text and font utility on every button in the app. box-sizing, margin and
+   padding resets, and the default font family, are already handled by Tailwind Preflight, so
+   they are not repeated here. Body, html and root element sizing now live as utility classes
+   in index.html instead. */
+@layer base {
+  input,
+  [contenteditable] {
+    user-select: text;
+  }
+
+  button {
+    font: inherit;
+  }
+
+  /* A desktop app: controls keep the arrow, as native ones do; no pointing hand anywhere. */
+  a,
+  button,
+  [role='button'],
+  [role='menuitem'] {
+    cursor: default;
+  }
+
+  /* No core Tailwind utility for scrollbar pseudo-elements. */
+  ::-webkit-scrollbar {
+    width: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    /* Sharp, like every other surface (Feature 3). */
+    border-radius: 0;
+  }
+}
+
+@keyframes plexo-dash {
+  to {
+    stroke-dashoffset: -60;
+  }
+}
+
+@keyframes plexo-glow {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes plexo-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

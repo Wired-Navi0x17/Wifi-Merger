@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Plexo CIE Feature Report 02: Learning from Network Behaviour</title>
+        <style>
+            @page {
+                size: A4;
+                margin: 18mm 16mm 18mm 16mm;
+            }
+            * {
+                box-sizing: border-box;
+            }
+            body {
+                font-family: Georgia, 'Times New Roman', serif;
+                color: #111;
+                line-height: 1.55;
+                margin: 0;
+            }
+            .page {
+                max-width: 720px;
+                margin: 0 auto;
+                padding: 24px 8px 48px;
+            }
+            header.cover {
+                text-align: center;
+                border-bottom: 3px double #111;
+                padding-bottom: 16px;
+                margin-bottom: 18px;
+            }
+            header.cover h1 {
+                font-size: 26px;
+                margin: 8px 0;
+            }
+            header.cover h2 {
+                font-size: 16px;
+                font-weight: normal;
+                margin: 4px 0;
+            }
+            .meta {
+                font-size: 13px;
+                color: #333;
+            }
+            h2.sec {
+                font-size: 18px;
+                border-bottom: 1px solid #111;
+                padding-bottom: 4px;
+                margin-top: 28px;
+            }
+            h3 {
+                font-size: 15px;
+                margin-bottom: 4px;
+            }
+            p,
+            li {
+                font-size: 14px;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 13px;
+                margin: 10px 0;
+            }
+            th,
+            td {
+                border: 1px solid #555;
+                padding: 6px 8px;
+                text-align: left;
+                vertical-align: top;
+            }
+            th {
+                background: #eee;
+            }
+            code {
+                font-family: Consolas, monospace;
+                font-size: 12px;
+                background: #f4f4f4;
+                padding: 1px 4px;
+            }
+            pre {
+                background: #f4f4f4;
+                padding: 10px;
+                font-size: 12px;
+                overflow-x: auto;
+                border: 1px solid #999;
+            }
+            figure.flow {
+                border: 1px solid #111;
+                padding: 12px;
+                margin: 12px 0;
+                text-align: center;
+            }
+            figure.flow svg {
+                max-width: 100%;
+                height: auto;
+            }
+            figcaption {
+                font-size: 12px;
+                color: #333;
+                margin-top: 6px;
+            }
+            .note {
+                background: #f9f9e8;
+                border: 1px solid #999;
+                padding: 8px 10px;
+                font-size: 13px;
+            }
+            footer {
+                margin-top: 28px;
+                border-top: 1px solid #111;
+                padding-top: 8px;
+                font-size: 12px;
+                color: #333;
+            }
+            @media print {
+                .page {
+                    padding: 0;
+                }
+                .noprint {
+                    display: none;
+                }
+                h2.sec {
+                    page-break-after: avoid;
+                }
+                table,
+                figure.flow,
+                pre {
+                    page-break-inside: avoid;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="page">
+            <header class="cover">
+                <div class="meta">
+                    CS2403 Computer Networks, Continuous Internal Evaluation (CIE)
+                </div>
+                <h1>Plexo Feature Report 02:<br />Learning from Network Behaviour</h1>
+                <h2>
+                    Per-host and per-network profiles plus a Gaussian Thompson Sampling tail
+                    strategist. The deterministic engine still executes every download. The learner
+                    only advises tail strategy, inside hard caps, with an off switch and a forget
+                    button.
+                </h2>
+                <div class="meta">
+                    Version 1.1, 2026-10-17. Companion: Feature Report 01 (auto organize) and the
+                    permanent fixture set in TEST-FIXTURES.md. Supersedes version 1.0 of
+                    2026-10-16.
+                </div>
+            </header>
+
+            <div class="noprint note">
+                Print instruction: open this file in a browser and press Print to PDF, A4, margins
+                default. This banner does not print.
+            </div>
+
+            <h2 class="sec">1. Executive summary</h2>
+            <p>
+                <strong>Problem.</strong> Some servers limit each connection (per-connection
+                throttling). Near the end of a download, one slow tail block can hold the whole file
+                while idle streams wait, because the fixed rules (hedge after 2 s, start 8 streams)
+                assume an average server. An open Plexo issue documents this tail stall on such
+                servers.
+            </p>
+            <p>
+                <strong>Solution.</strong> Plexo keeps persistent local profiles per download source
+                and network (throughput and tail length as moving averages, retry totals) and a
+                Gaussian Thompson Sampling bandit over three tail strategies: conservative (4
+                streams, hedge after 4000 ms), standard (8 streams, 2000 ms, today's default) and
+                aggressive (16 streams, hedge after 1000 ms). While any arm is untried, one of the
+                untried arms is picked uniformly, so all three get a first run. After that each arm
+                samples from its posterior, the best draw wins, and a 10 percent epsilon floor keeps
+                exploring. Acting is fenced: hedge timing stays within 1000 to 4000 ms, starting
+                streams within 4 to 16, server ceilings, disk caps, user picks and per-block hedge
+                caps still win, and the whole advisor is off by default (record-only) until enabled
+                in the new <strong>Learning</strong> dialog, which also has a
+                <strong>Forget learned data</strong> button.
+            </p>
+            <p>
+                <strong>Result.</strong> Recording and arm selection are verified end to end: 14
+                learning tests pass, including two downloads from a throttled origin that complete
+                and are recorded, an activated run that selects an arm and persists updated beliefs,
+                and a fixture download with <code>PLEXO_DEBUG=1</code> that logs arm choice and
+                outcome. The 20-test engine suite and the 10-test UI suite still pass, and all four
+                typecheck projects exit 0.
+            </p>
+
+            <h2 class="sec">2. Background: the tail problem in one paragraph</h2>
+            <p>
+                A Plexo HTTP download splits a file into blocks fetched by parallel TCP streams.
+                When blocks remain, every stream has work. When only slow blocks remain, free
+                streams hedge them (re-fetch the same range, first finisher wins). Fixed hedge
+                timing is a compromise: too early wastes bytes on healthy servers, too late stalls
+                on throttled ones. The learner personalizes this compromise per host and network
+                kind from observed history instead of guessing once for all servers.
+            </p>
+
+            <h2 class="sec">3. Design</h2>
+            <figure class="flow">
+                <svg
+                    viewBox="0 0 640 170"
+                    xmlns="http://www.w3.org/2000/svg"
+                    font-family="Georgia, serif"
+                    font-size="12"
+                >
+                    <rect
+                        x="8"
+                        y="20"
+                        width="120"
+                        height="60"
+                        fill="#fff"
+                        stroke="#111"
+                        stroke-width="2"
+                    />
+                    <text x="68" y="45" text-anchor="middle">Download runs</text>
+                    <text x="68" y="62" text-anchor="middle">engine decides</text>
+                    <rect
+                        x="148"
+                        y="20"
+                        width="120"
+                        height="60"
+                        fill="#fff"
+                        stroke="#111"
+                        stroke-width="2"
+                    />
+                    <text x="208" y="45" text-anchor="middle">Outcome event</text>
+                    <text x="208" y="62" text-anchor="middle">tail, retries</text>
+                    <rect
+                        x="288"
+                        y="20"
+                        width="120"
+                        height="60"
+                        fill="#fff"
+                        stroke="#111"
+                        stroke-width="2"
+                    />
+                    <text x="348" y="45" text-anchor="middle">Profiles +</text>
+                    <text x="348" y="62" text-anchor="middle">bandit update</text>
+                    <rect
+                        x="428"
+                        y="20"
+                        width="204"
+                        height="60"
+                        fill="#fff"
+                        stroke="#111"
+                        stroke-width="2"
+                    />
+                    <text x="530" y="45" text-anchor="middle">Next download: suggest arm</text>
+                    <text x="530" y="62" text-anchor="middle">clamped, capped, logged</text>
+                    <rect
+                        x="198"
+                        y="105"
+                        width="250"
+                        height="45"
+                        fill="#f9f9e8"
+                        stroke="#111"
+                        stroke-width="2"
+                    />
+                    <text x="323" y="124" text-anchor="middle">learning.json (local only)</text>
+                    <text x="323" y="140" text-anchor="middle">versioned, capped, sanitized</text>
+                    <line x1="128" y1="50" x2="148" y2="50" stroke="#111" stroke-width="2" />
+                    <line x1="268" y1="50" x2="288" y2="50" stroke="#111" stroke-width="2" />
+                    <line x1="408" y1="50" x2="428" y2="50" stroke="#111" stroke-width="2" />
+                </svg>
+                <figcaption>
+                    Figure 1. The engine executes and reports. The learner updates beliefs and
+                    advises the next run. Storage never leaves the machine.
+                </figcaption>
+            </figure>
+            <h3>3.1 Profiles (<code>learning/profiles.ts</code>)</h3>
+            <p>
+                Per host: download and completion counts, throughput and tail length as exponential
+                moving averages (weight 0.3 per sample), a time-to-first-byte average, retry totals,
+                stall counts and status-code refusal counters (403, 429, 503, other). Per network: a
+                throughput average, stall count and download count. A host with 2 or more downloads
+                and 3 or more refusals plus retries reads as rate-limited
+                (<code>looksRateLimited</code>). Honest note: in this build the engine reports
+                first-byte time and stalls as 0, and nothing increments the refusal counters yet.
+                Those fields are recorded for completeness; the moving averages only update on
+                positive samples, so they stay 0 until the wiring lands. The reward in the next
+                section uses the signals that are live today: completed, tail duration and retries.
+            </p>
+            <h3>3.2 Bandit (<code>learning/bandit.ts</code>)</h3>
+            <p>
+                Gaussian Thompson Sampling over three arms. Choice: if any arm has zero pulls, one
+                of the untried arms is picked uniformly, so every arm is tried before posterior
+                sampling starts. Otherwise, with probability 0.1 (epsilon) a uniformly random arm
+                is picked to keep exploring; the rest of the time each arm is sampled once from its
+                Gaussian posterior (mean and sample variance from a Welford update, variance floor
+                0.01) and the highest draw wins. Reward: a failed run scores -2; a completed run
+                scores <code>clamp(saved * 2 - retryCost, -2, +2)</code>, where
+                <code>saved = (expectedTailMs - tailMs) / expectedTailMs</code>,
+                <code>expectedTailMs = max(host average tail, 1000)</code> and
+                <code>retryCost = min(retries / 10, 1)</code>. The tail is measured from the moment
+                the last pending block is taken into work until the run ends. Method follows
+                Agrawal and Goyal 2012 (Thompson Sampling); reference implementation consulted:
+                PyPI <code>thompson</code> (MIT, Erdogan Taskesen). The code is an independent,
+                dependency-free port, attributed inline. No model download, no API, no network use.
+            </p>
+            <h3>3.3 Context (<code>learning/context.ts</code>)</h3>
+            <p>
+                Key is <code>host|network-kind|size-band|range-flag</code> (for example
+                <code>example.com|wifi|s|r</code>). The host is lowercased with port and brackets
+                stripped; anything that isn't a plausible host becomes <code>unknown</code>. Size
+                bands: small below 10 MiB, medium up to 500 MiB, large above (unknown size counts
+                as large). Small enough for a host to get repeat visits (learning needs repeats),
+                specific enough to matter: a host throttling phones but not Wi-Fi learns two
+                lessons.
+            </p>
+            <h3>3.4 Safety rails and controls</h3>
+            <ul>
+                <li>
+                    Record-only is the default. Acting needs <code>settings.learning.tailAdaptive</code
+                    >, which the <strong>Learning</strong> dialog (Downloads screen) writes, or an
+                    edit of <code>app-settings.json</code> by hand. The setting validator keeps only
+                    <code>true</code>; off means the key is absent.
+                </li>
+                <li>
+                    <strong>Forget learned data</strong> in the same dialog calls a
+                    <code>learning:reset</code> IPC that clears every profile and belief and saves
+                    an empty store.
+                </li>
+                <li>
+                    Suggestions are clamped (hedge 1000 to 4000 ms, streams 4 to 16 done with
+                    integer floors). User stream picks and test knobs have priority over the
+                    learner, and existing per-block hedge limits still apply.
+                </li>
+                <li>
+                    With the switch off nothing reads the beliefs: the transfer asks for a
+                    suggestion, gets <code>null</code>, and uses the unchanged default policy.
+                </li>
+                <li>Learning never throws into a download; corrupt stores fall back to empty.</li>
+            </ul>
+
+            <h2 class="sec">4. Permanent test fixtures (shared standard)</h2>
+            <p>
+                Canonical set in <code>test-fixtures/</code>: <code>sample.pdf</code> (10 KiB),
+                <code>sample.mp4</code> (200 KiB), <code>sample.zip</code> (50 KiB), deterministic
+                seeded bytes with <code>SHA256SUMS</code>. Serve locally with
+                <code>python3 scripts/serve-fixtures.py</code> for stable URLs (<code
+                    >http://127.0.0.1:8123/sample.pdf</code
+                >
+                and friends). The learning live test starts the same server on port 8125. The
+                internet copy as a fork release asset is planned; public fallbacks are listed in
+                <code>TEST-FIXTURES.md</code>. Payloads are opaque bytes keyed by extension, not
+                playable media.
+            </p>
+
+            <h2 class="sec">5. Evidence and verification</h2>
+            <p>
+                All rows below were executed on the demo machine with
+                <code>npx playwright test</code> (through <code>steam-run</code> for Electron's
+                shared libraries) and <code>npm run typecheck</code>. The learning file ran 14 tests
+                and all 14 passed.
+            </p>
+            <table>
+                <tr>
+                    <th>Check</th>
+                    <th>How</th>
+                    <th>Observed</th>
+                </tr>
+                <tr>
+                    <td>Untried arms explored first</td>
+                    <td>bandit math test: untried arms are explored before any dominates</td>
+                    <td>PASS</td>
+                </tr>
+                <tr>
+                    <td>Rewards move beliefs</td>
+                    <td>bandit math test: rewards move beliefs toward the better arm</td>
+                    <td>PASS</td>
+                </tr>
+                <tr>
+                    <td>Failures score below fast tails</td>
+                    <td>bandit math test: failed runs score below completed fast tails</td>
+                    <td>PASS</td>
+                </tr>
+                <tr>
+                    <td>Reward bounds and retry penalty</td>
+                    <td>bandit math test: rewardOf clamps within [-2, +2] and factors retry penalties</td>
+                    <td>PASS</td>
+                </tr>
+                <tr>
+                    <td>Welford online update</td>
+                    <td>bandit math test: matches exact sample mean and variance</td>
+                    <td>PASS</td>
+                </tr>
+                <tr>
+                    <td>Thompson sampling exploitation</td>
+                    <td>bandit math test: strongly exploits the superior arm with zero epsilon</td>
+                    <td>PASS</td>
+                </tr>
+                <tr>
+                    <td>Contexts separate</td>
+                    <td>hosts, kinds, sizes and range support produce distinct keys</td>
+                    <td>PASS</td>
+                </tr>
+                <tr>
+                    <td>Size band boundaries</td>
+                    <td>sizeBand test at 10 MiB and 500 MiB edges</td>
+                    <td>PASS</td>
+                </tr>
+                <tr>
+                    <td>Rate limit signal</td>
+                    <td>repeated retries mark a host rate-limited</td>
+                    <td>PASS</td>
+                </tr>
+                <tr>
+                    <td>Store LRU cap</td>
+                    <td>learning store caps hosts to MAX_HOSTS (200) using recency</td>
+                    <td>PASS</td>
+                </tr>
+                <tr>
+                    <td>Store resilience</td>
+                    <td>corrupt JSON recovers without throwing</td>
+                    <td>PASS</td>
+                </tr>
+                <tr>
+                    <td>Recording end to end</td>
+                    <td>two throttled origin downloads complete and are recorded in learning.json</td>
+                    <td>PASS</td>
+                </tr>
+                <tr>
+                    <td>Adaptive tail activation</td>
+                    <td><code>tailAdaptive: true</code>: arm chosen, beliefs updated and persisted</td>
+                    <td>PASS</td>
+                </tr>
+                <tr>
+                    <td>Live fixtures and debug logs</td>
+                    <td>fixture download with <code>PLEXO_DEBUG=1</code> logs choose and outcome, beliefs update</td>
+                    <td>PASS</td>
+                </tr>
+                <tr>
+                    <td>Engine regression</td>
+                    <td><code>e2e/download.spec.ts</code> unchanged</td>
+                    <td>20 of 20 pass</td>
+                </tr>
+                <tr>
+                    <td>UI regression</td>
+                    <td><code>e2e/ui.spec.ts</code></td>
+                    <td>10 of 10 pass</td>
+                </tr>
+                <tr>
+                    <td>Learning dialog check</td>
+                    <td>Playwright: toggle persists true, forget clears learning.json, toggle off removes the key</td>
+                    <td>PASS</td>
+                </tr>
+                <tr>
+                    <td>Compiles everywhere</td>
+                    <td><code>npm run typecheck</code> (node, web, e2e, extension)</td>
+                    <td>All four exit 0; ESLint and Prettier clean</td>
+                </tr>
+            </table>
+
+            <h2 class="sec">6. Limitations and roadmap</h2>
+            <ul>
+                <li>
+                    Acting phase is tail-only: startup streams and hedge timing. Peer spread and
+                    block size stay heuristic until measured wins justify more.
+                </li>
+                <li>
+                    First-byte time, stalls and refusal counters are recorded fields with no live
+                    wiring yet (they read 0); the defined rate-limit flag is unit-tested but the
+                    runtime does not consult it today. The reward uses tail duration and retries,
+                    which are live.
+                </li>
+                <li>
+                    Evidence uses the scripted test origin (deterministic throttling and request
+                    checking), not a real throttling CDN; field trials come next.
+                </li>
+                <li>Torrents record nothing yet; the same profile shape is reserved.</li>
+                <li>
+                    Roadmap: enable tail-adaptive by default after field wins, LinUCB context
+                    upgrade, tiny local inspector UI. The undoable store reset shipped in this
+                    version as the dialog's Forget button.
+                </li>
+            </ul>
+
+            <h2 class="sec">7. Files changed</h2>
+            <ul>
+                <li>
+                    New: <code>src/main/download/learning/profiles.ts</code>,
+                    <code>bandit.ts</code>, <code>context.ts</code>, <code>store.ts</code>,
+                    <code>src/renderer/src/components/LearningDialog.tsx</code>,
+                    <code>e2e/learning.spec.ts</code>, <code>test-fixtures/*</code>,
+                    <code>scripts/serve-fixtures.py</code>, <code>scripts/make-fixtures.py</code>,
+                    <code>TEST-FIXTURES.md</code>, this report.
+                </li>
+                <li>
+                    Modified: <code>src/shared/types.ts</code> (learning flag and initial state),
+                    <code>src/shared/ipc-channels.ts</code> and
+                    <code>src/shared/ipc-contract.ts</code> (learning reset),
+                    <code>src/main/settings.ts</code>,
+                    <code>src/main/download/transfer.ts</code> (TailSuggestion),
+                    <code>src/main/download/httpTransfer.ts</code> (per-run policy),
+                    <code>src/main/download/downloadManager.ts</code> (advise, record, reset),
+                    <code>src/main/ipc/handlers.ts</code>,
+                    <code>src/preload/index.ts</code>,
+                    <code>src/renderer/src/store/useAppStore.ts</code>,
+                    <code>src/renderer/src/screens/DownloadsScreen.tsx</code> (Learning button),
+                    <code>e2e/fixtures.ts</code>.
+                </li>
+            </ul>
+
+            <h2 class="sec">Appendix A. Demo script (5 minutes)</h2>
+            <ol>
+                <li>
+                    Open the Learning dialog from Downloads. Show the toggle off (default) and the
+                    explanation text.
+                </li>
+                <li>
+                    Run two downloads of <code>sample.pdf</code> from the local fixture server
+                    (or any small file). Open <code>learning.json</code> afterwards and show the
+                    host entry grew while nothing about the downloads changed (record-only).
+                </li>
+                <li>
+                    Toggle on, run another download with <code>PLEXO_DEBUG=1</code>, and show the
+                    console lines <code>[plexo] learn choose</code> and
+                    <code>[plexo] learn outcome</code> plus the updated beliefs in
+                    <code>learning.json</code>.
+                </li>
+                <li>
+                    Press <strong>Forget learned data</strong>, reopen the file, show it was
+                    emptied.
+                </li>
+            </ol>
+
+            <h2 class="sec">Appendix B. Constants and file formats</h2>
+            <p>Arms and fences (all in code, nothing remote):</p>
+            <table>
+                <tr>
+                    <th>Constant</th>
+                    <th>Value</th>
+                    <th>Where</th>
+                </tr>
+                <tr>
+                    <td>Arms</td>
+                    <td>4 streams / 4000 ms, 8 / 2000, 16 / 1000</td>
+                    <td><code>learning/bandit.ts</code></td>
+                </tr>
+                <tr>
+                    <td>Epsilon</td>
+                    <td>0.1 uniform exploration</td>
+                    <td><code>learning/bandit.ts</code></td>
+                </tr>
+                <tr>
+                    <td>Reward range</td>
+                    <td>clamped to -2 .. +2; failures -2</td>
+                    <td><code>learning/bandit.ts</code></td>
+                </tr>
+                <tr>
+                    <td>Hedge clamp</td>
+                    <td>1000 to 4000 ms</td>
+                    <td><code>download/httpTransfer.ts</code></td>
+                </tr>
+                <tr>
+                    <td>Stream clamp</td>
+                    <td>4 to 16 per network</td>
+                    <td><code>download/httpTransfer.ts</code></td>
+                </tr>
+                <tr>
+                    <td>Profile EMA weight</td>
+                    <td>0.3</td>
+                    <td><code>learning/profiles.ts</code></td>
+                </tr>
+                <tr>
+                    <td>Store version and caps</td>
+                    <td>version 1, up to 200 hosts, 40 networks</td>
+                    <td><code>learning/store.ts</code></td>
+                </tr>
+                <tr>
+                    <td>Size bands</td>
+                    <td>small below 10 MiB, medium up to 500 MiB, else large</td>
+                    <td><code>learning/context.ts</code></td>
+                </tr>
+            </table>
+            <p>
+                The store lives in <code>learning.json</code> under the OS user data folder:
+            </p>
+            <pre>
+{
+  "version": 1,
+  "hosts": {
+    "127.0.0.1": {"host": "127.0.0.1", "downloads": 2, "completed": 2,
+                   "ewmaThroughput": 60321.5, "ewmaTtfb": 0, "retries": 0,
+                   "stalls": 0, "ewmaTailMs": 812.4, "updatedAt": 1760700000000,
+                   "refusals": {"refused403": 0, "refused429": 0,
+                                "refused503": 0, "other": 0}}
+  },
+  "networks": {"127.0.0.1|eth0": {"key": "127.0.0.1|eth0", "kind": "ethernet",
+                "downloads": 2, "ewmaThroughput": 60321.5, "stalls": 0,
+                "updatedAt": 1760700000000}},
+  "beliefs": {"127.0.0.1|ethernet|s|r": [
+      {"pulls": 1, "mean": 0.42, "m2": 0.0},
+      {"pulls": 1, "mean": -0.15, "m2": 0.0},
+      {"pulls": 0, "mean": 0, "m2": 0}]}
+}</pre
+            >
+            <p>
+                The switch lives in <code>app-settings.json</code> as
+                <code>{"learning": {"tailAdaptive": true}}</code>; off means the key is absent.
+            </p>
+
+            <footer>Prepared for class handout. Print to PDF for submission.</footer>
+        </div>
+    </body>
+</html>

@@ -1,0 +1,27 @@
+# Application binaries & packaging artifacts
+plexo-app/*.AppImage
+plexo-app/squashfs-root/
+squashfs-root/
+
+# Node / Electron build artifacts
+**/node_modules/
+**/dist/
+**/out/
+**/.eslintcache
+**/*.tsbuildinfo
+**/*.log*
+
+# Test artifacts
+**/test-results/
+**/playwright-report/
+
+# Python cache
+**/__pycache__/
+**/*.py[cod]
+
+# OS files
+**/.DS_Store
+Thumbs.db
+
+# Upstream git backup
+**/.git_upstream_backup/

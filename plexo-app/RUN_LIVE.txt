@@ -1,0 +1,68 @@
+Plexo live run guide
+===================
+
+You have two ways to run. Pick one.
+
+A. Packaged app (works now, no build)
+-------------------------------------
+File: CIE/plexo-app/plexo.AppImage (137 MB, v1.0.0-rc.15, x86_64)
+
+Run:
+  cd "CIE"
+  chmod +x plexo-app/plexo.AppImage
+  ./plexo-app/plexo.AppImage
+
+If FUSE is missing on NixOS, unpack instead:
+  ./plexo-app/plexo.AppImage --appimage-extract
+  ./squashfs-root/AppRun
+
+What to try:
+  1. Open Networks, plug phone via USB tether, see it appear in about 1 second.
+  2. New Download, paste an https file link, keep Wi-Fi plus phone both on.
+  3. Toggle one network off mid flight. Streams retire. Bytes stay. Toggle on to resume.
+  4. Open Speed and data limits, set per network cap, watch streams pause and resume.
+
+B. Live dev (edit code, see changes)
+------------------------------------
+Why a copy exists: this CIE path has spaces (Semester 3, Computer Networks).
+Electron native rebuild fails on spaces, and make plus g++ are absent on this
+Nix box. So a no space copy was prepared:
+
+/tmp/opencode/plexo-dev
+
+It already has node_modules plus electron binary. Run:
+
+  cd /tmp/opencode/plexo-dev
+  npm run dev
+
+Debug each request:
+
+  PLEXO_DEBUG=1 npm run dev
+
+Fake networks for tests (no phone needed):
+
+  PLEXO_E2E_INTERFACES="wifi=127.0.0.1,phone=127.0.0.1" npm run dev
+
+Edit and reload:
+  src/main/network/routes.ts      socket pin and Happy Eyeballs
+  src/main/download/httpTransfer.ts  streams and hedge
+  src/main/download/torrent/torrentTransfer.ts  peer spread
+  src/renderer/src                UI auto reloads
+
+Sync back your edits:
+
+  cp /tmp/opencode/plexo-dev/src/main/network/routes.ts "CIE/plexo/src/main/network/routes.ts"
+
+Or move the repo once to a no space home path for full builds:
+
+  cp -a "CIE/plexo" ~/plexo-dev
+  cd ~/plexo-dev
+  npm install --ignore-scripts
+  npx install-electron
+  npm run dev
+
+Notes:
+  - Upstream release used for AppImage: anmolkapil/plexo v1.0.0-rc.15.
+    Your fork Wired-Navi0x17/plexo has no release asset, same code family.
+  - Whitepaper site: CIE/plexo-whitepaper/index.html, open directly or serve:
+      python3 -m http.server 8000 --directory CIE/plexo-whitepaper

@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "get-research-paper": {
+      "source": "aniketkrs/research-paper",
+      "sourceType": "github",
+      "skillPath": "skills/get-research-paper/SKILL.md",
+      "computedHash": "5385f4efa533745e779fce30f177d22b8dfa4ed1a5acd176cf42bf70c5325ecf"
+    },
+    "read-research-paper": {
+      "source": "aniketkrs/research-paper",
+      "sourceType": "github",
+      "skillPath": "skills/read-research-paper/SKILL.md",
+      "computedHash": "8c4a6ac40d60f3fd0892979bc0a7ab14c70b5ac2db6f440ad1da4e07cbc4d234"
+    },
+    "research-paper": {
+      "source": "aniketkrs/research-paper",
+      "sourceType": "github",
+      "skillPath": "skills/research-paper/SKILL.md",
+      "computedHash": "5281344fa290487ce48f9f292cf124b38a8321e534e7707cdc02032a13d35853"
+    }
+  }
+}
