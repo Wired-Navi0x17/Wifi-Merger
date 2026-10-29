@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Feature 05 — Checksum Verification &amp; Intelligent Repair | Wifi-Merger</title>
+<style>
+  :root {
+    --bg: #f8fafc;
+    --surface: #ffffff;
+    --ink: #0f172a;
+    --muted: #475569;
+    --line: #e2e8f0;
+    --brand: #4f46e5;
+    --brand-soft: #eef2ff;
+    --teal: #0d9488;
+    --teal-soft: #ccfbf1;
+    --amber: #b45309;
+    --amber-soft: #fef3c7;
+    --red: #b91c1c;
+    --red-soft: #fee2e2;
+    --code-bg: #0f172a;
+    --code-ink: #e2e8f0;
+    --radius: 12px;
+    --shadow: 0 1px 2px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.06);
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .container { max-width: 1000px; margin: 0 auto; padding: 48px 24px 96px; }
+
+  /* ---------- Header ---------- */
+  header.hero {
+    background: linear-gradient(135deg, #312e81 0%, #4f46e5 55%, #0d9488 100%);
+    color: #fff;
+    border-radius: 18px;
+    padding: 40px 36px;
+    box-shadow: var(--shadow);
+    margin-bottom: 40px;
+  }
+  .hero .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.3);
+    padding: 5px 12px; border-radius: 999px; margin-bottom: 18px;
+  }
+  .hero h1 { margin: 0 0 12px; font-size: 34px; line-height: 1.2; font-weight: 800; letter-spacing: -.02em; }
+  .hero p.lede { margin: 0; font-size: 18px; color: rgba(255,255,255,.92); max-width: 760px; }
+  .hero .meta { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip {
+    font-size: 12.5px; font-weight: 600; padding: 5px 12px; border-radius: 999px;
+    background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25);
+  }
+  .chip.ok { background: rgba(16,185,129,.25); border-color: rgba(16,185,129,.5); }
+
+  /* ---------- TOC ---------- */
+  nav.toc {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 20px 24px; margin-bottom: 40px; box-shadow: var(--shadow);
+  }
+  nav.toc strong { display: block; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  nav.toc ol { margin: 0; padding-left: 20px; columns: 2; column-gap: 32px; }
+  nav.toc li { margin: 3px 0; }
+  nav.toc a { color: var(--brand); text-decoration: none; font-weight: 500; font-size: 14.5px; }
+  nav.toc a:hover { text-decoration: underline; }
+
+  /* ---------- Sections ---------- */
+  section { margin-bottom: 52px; scroll-margin-top: 24px; }
+  h2 {
+    font-size: 24px; font-weight: 750; letter-spacing: -.01em; margin: 0 0 6px;
+    padding-bottom: 10px; border-bottom: 2px solid var(--line);
+  }
+  h2 .num { color: var(--brand); margin-right: 10px; }
+  h3 { font-size: 18px; font-weight: 700; margin: 28px 0 8px; }
+  p { margin: 0 0 14px; color: #1e293b; }
+  ul, ol { margin: 0 0 14px; padding-left: 22px; }
+  li { margin: 5px 0; }
+
+  a { color: var(--brand); }
+
+  code.inline {
+    background: #eef2ff; color: #3730a3; padding: 2px 6px; border-radius: 5px;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13.5px; font-weight: 600;
+  }
+
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 20px 22px; border-radius: var(--radius); overflow-x: auto;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13.5px; line-height: 1.6; margin: 0 0 18px;
+    border: 1px solid #1e293b;
+  }
+  pre .c { color: #94a3b8; }   /* comment */
+  pre .k { color: #c4b5fd; }   /* keyword */
+  pre .s { color: #86efac; }   /* string */
+  pre .f { color: #7dd3fc; }   /* function */
+  pre .n { color: #fca5a5; }   /* number / literal */
+
+  /* ---------- Cards ---------- */
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 24px 26px; box-shadow: var(--shadow); margin-bottom: 18px;
+  }
+  .card > :last-child { margin-bottom: 0; }
+  .card h3:first-child { margin-top: 0; }
+
+  /* At-a-glance grid */
+  .glance { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 18px; }
+  .glance .item {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 18px 20px; box-shadow: var(--shadow);
+  }
+  .glance .label { font-size: 11.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .glance .value { font-size: 16px; font-weight: 650; color: var(--ink); }
+  .glance .value small { display: block; font-weight: 500; font-size: 13.5px; color: var(--muted); margin-top: 3px; }
+
+  /* Callouts */
+  .callout { border-radius: var(--radius); padding: 16px 20px; margin: 18px 0; border-left: 4px solid; font-size: 15px; }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout.info  { background: var(--brand-soft); border-color: var(--brand); color: #312e81; }
+  .callout.warn  { background: var(--amber-soft); border-color: #d97706; color: #78350f; }
+  .callout.good  { background: var(--teal-soft);  border-color: var(--teal); color: #134e4a; }
+  .callout.bad   { background: var(--red-soft);   border-color: var(--red);  color: #7f1d1d; }
+
+  /* Tables */
+  .table-wrap { overflow-x: auto; margin: 0 0 18px; border-radius: var(--radius); border: 1px solid var(--line); box-shadow: var(--shadow); }
+  table { width: 100%; border-collapse: collapse; background: var(--surface); font-size: 14.5px; }
+  thead th {
+    background: #f1f5f9; text-align: left; font-size: 12px; font-weight: 700;
+    letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+    padding: 12px 16px; border-bottom: 1px solid var(--line); white-space: nowrap;
+  }
+  tbody td { padding: 12px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:nth-child(even) { background: #fafbfd; }
+
+  /* Badges inside tables */
+  .tag { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+  .tag.new  { background: var(--brand-soft); color: #3730a3; }
+  .tag.mod  { background: var(--amber-soft); color: #92400e; }
+  .tag.ok   { background: var(--teal-soft);  color: #115e59; }
+  .tag.fail { background: var(--red-soft);   color: #991b1b; }
+
+  /* UI state pills */
+  .states { display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0 18px; }
+  .state {
+    display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600;
+    padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .dot.gray   { background: #94a3b8; }
+  .dot.blue   { background: #3b82f6; }
+  .dot.green  { background: #10b981; }
+  .dot.amber  { background: #f59e0b; }
+  .dot.red    { background: #ef4444; }
+
+  /* Checklist */
+  .checklist { list-style: none; padding: 0; margin: 0; }
+  .checklist li { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px dashed var(--line); }
+  .checklist li:last-child { border-bottom: none; }
+  .checklist .box {
+    flex: none; width: 20px; height: 20px; margin-top: 2px; border-radius: 5px;
+    border: 2px solid #94a3b8; display: grid; place-items: center;
+    font-size: 12px; color: transparent;
+  }
+
+  /* Diagram */
+  figure.diagram { margin: 0 0 18px; }
+  figure.diagram .frame {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 10px; box-shadow: var(--shadow); overflow-x: auto;
+  }
+  figure.diagram svg { display: block; width: 100%; height: auto; min-width: 820px; }
+  figcaption { font-size: 13.5px; color: var(--muted); margin-top: 10px; text-align: center; }
+
+  /* Strategy cards */
+  .strategies { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-bottom: 18px; }
+  .strategy { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 24px; box-shadow: var(--shadow); border-top: 4px solid var(--brand); }
+  .strategy.b { border-top-color: var(--teal); }
+  .strategy h4 { margin: 0 0 6px; font-size: 16px; font-weight: 750; }
+  .strategy .when { font-size: 12.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .strategy ol { margin-bottom: 0; font-size: 14.5px; }
+
+  /* Footer */
+  footer.doc {
+    margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--line);
+    font-size: 13.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px 24px;
+    justify-content: space-between;
+  }
+
+  @media (max-width: 640px) {
+    .container { padding: 24px 16px 64px; }
+    header.hero { padding: 28px 22px; border-radius: 14px; }
+    .hero h1 { font-size: 26px; }
+    nav.toc ol { columns: 1; }
+  }
+
+  @media print {
+    body { background: #fff; font-size: 12pt; }
+    .container { max-width: none; padding: 0; }
+    header.hero { background: #312e81 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    nav.toc, .card, .glance .item, .table-wrap, .strategy, figure.diagram .frame { box-shadow: none; }
+    section { page-break-inside: avoid; }
+    pre { white-space: pre-wrap; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ================= HEADER ================= -->
+  <header class="hero">
+    <span class="eyebrow">Feature 05 &middot; Wifi-Merger</span>
+    <h1>Checksum Verification &amp; Intelligent Chunk Repair</h1>
+    <p class="lede">
+      After a file is assembled from chunks pulled over multiple network interfaces, Wifi-Merger
+      verifies the final result against a known checksum &mdash; and if it fails, re-downloads
+      <strong>only the corrupted chunks</strong> instead of the entire file.
+    </p>
+    <div class="meta">
+      <span class="chip">Scope: direct HTTP/HTTPS</span>
+      <span class="chip">Algorithms: MD5 &middot; SHA-1 &middot; SHA-256</span>
+      <span class="chip ok">Builds on Network Learning + Auto-Organize</span>
+      <span class="chip">Status: implemented on <code style="background:rgba(255,255,255,.18);color:#fff;padding:1px 6px;border-radius:4px;">feature/checksum-verification-repair</code></span>
+    </div>
+  </header>
+
+  <!-- ================= TOC ================= -->
+  <nav class="toc" aria-label="Table of contents">
+    <strong>On this page</strong>
+    <ol>
+      <li><a href="#glance">At a glance</a></li>
+      <li><a href="#problem">The problem</a></li>
+      <li><a href="#how">How it works</a></li>
+      <li><a href="#diagram">Sequence diagram</a></li>
+      <li><a href="#ux">User experience</a></li>
+      <li><a href="#architecture">Technical architecture</a></li>
+      <li><a href="#interface">Interface selection for repair</a></li>
+      <li><a href="#cli">CLI usage</a></li>
+      <li><a href="#edge">Edge cases</a></li>
+      <li><a href="#testing">Testing plan</a></li>
+      <li><a href="#delta">New vs. existing</a></li>
+      <li><a href="#dod">Definition of done</a></li>
+    </ol>
+  </nav>
+
+  <!-- ================= AT A GLANCE ================= -->
+  <section id="glance">
+    <h2><span class="num">01</span>At a glance</h2>
+    <div class="glance">
+      <div class="item">
+        <div class="label">Trigger</div>
+        <div class="value">Download complete<small>Fires after the last chunk is written</small></div>
+      </div>
+      <div class="item">
+        <div class="label">Input</div>
+        <div class="value">Expected checksum<small>User-supplied, auto-detected, or skipped</small></div>
+      </div>
+      <div class="item">
+        <div class="label">On mismatch</div>
+        <div class="value">Targeted repair<small>Only corrupted byte ranges are re-fetched</small></div>
+      </div>
+      <div class="item">
+        <div class="label">Retry budget</div>
+        <div class="value">3 attempts<small>Configurable; then flagged for manual action</small></div>
+      </div>
+      <div class="item">
+        <div class="label">Interface choice</div>
+        <div class="value">Bandit-assisted<small>Reuses <code class="inline">learning/bandit.ts</code></small></div>
+      </div>
+      <div class="item">
+        <div class="label">New dependencies</div>
+        <div class="value">None<small>Node.js <code class="inline">crypto</code> only</small></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= PROBLEM ================= -->
+  <section id="problem">
+    <h2><span class="num">02</span>The problem</h2>
+    <p>
+      Wifi-Merger's core advantage is also its biggest new risk. A single file is split into
+      chunks of 1&ndash;8&nbsp;MB and streamed in parallel across Wi&#8209;Fi, Ethernet, USB tethering,
+      and hotspots. Any one of those links can drop, stall, or deliver a truncated response body
+      while still returning a <code class="inline">200 OK</code>. The download "succeeds" and the
+      file is assembled &mdash; but the result may not be bit-identical to the source.
+    </p>
+    <p>
+      Before this feature, the app only validated that the <em>remote</em> file had not changed
+      between pauses (via <code class="inline">ETag</code> / <code class="inline">Last-Modified</code>).
+      There was no end-to-end check on the <em>local</em> assembled file, and no way to fix a
+      bad chunk short of deleting and restarting the download.
+    </p>
+    <div class="callout bad">
+      <p>
+        <strong>Failure mode:</strong> a corrupted 4&nbsp;MB chunk in a 6&nbsp;GB ISO means the whole
+        file must be discarded. For OS images, datasets, and installers, that is hours of wasted
+        bandwidth &mdash; much of it on metered mobile connections.
+      </p>
+    </div>
+  </section>
+
+  <!-- ================= HOW IT WORKS ================= -->
+  <section id="how">
+    <h2><span class="num">03</span>How it works</h2>
+    <p>The feature is a three-stage pipeline that runs automatically at the end of every
+      direct download, plus an on-demand "Manual Verify" action for completed files.</p>
+
+    <h3>Stage 1 &mdash; Acquire the expected hash</h3>
+    <p>The expected checksum is resolved from the first available source:</p>
+    <ol>
+      <li><strong>User input</strong> &mdash; the optional "Checksum" field in the New Download dialog.</li>
+      <li><strong>HTTP header</strong> &mdash; <code class="inline">Content-MD5</code> (base64) or a
+          <code class="inline">Digest</code> header when present.</li>
+      <li><strong>Sidecar file</strong> &mdash; e.g. <code class="inline">ubuntu.iso.sha256</code>
+          or <code class="inline">SHA256SUMS</code> sitting next to the target.</li>
+      <li><strong>None found</strong> &mdash; verification is skipped and the download behaves
+          exactly as it did before this feature.</li>
+    </ol>
+
+    <h3>Stage 2 &mdash; Verify the assembled file</h3>
+    <p>
+      After the final chunk is committed to disk, the download manager calls
+      <code class="inline">verifyDownload(id, expectedHash)</code>. The verifier streams the file
+      through Node's <code class="inline">crypto.createHash()</code> (constant memory, no full
+      file in RAM) and compares the digest. On a match the task is marked
+      <span class="tag ok">Verified</span> and the pipeline ends.
+    </p>
+
+    <h3>Stage 3 &mdash; Intelligent repair</h3>
+    <p>On mismatch, the repair engine takes over. It picks one of two strategies depending on
+      what metadata the source exposes:</p>
+
+    <div class="strategies">
+      <div class="strategy">
+        <div class="when">Strategy A &middot; preferred</div>
+        <h4>Per-chunk hashes available</h4>
+        <ol>
+          <li>Re-hash each cached chunk locally &mdash; no network I/O.</li>
+          <li>Mark only the chunks whose digest differs.</li>
+          <li>Re-fetch those chunks over the best available interface.</li>
+          <li>Re-verify the full file.</li>
+        </ol>
+      </div>
+      <div class="strategy b">
+        <div class="when">Strategy B &middot; fallback</div>
+        <h4>Whole-file hash only</h4>
+        <ol>
+          <li>Hash the first and second half of the file.</li>
+          <li>Recurse into whichever half (or both) mismatches.</li>
+          <li>Stop at chunk granularity &mdash; a binary search over the file.</li>
+          <li>Re-fetch only the chunks inside the corrupted region.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="callout info">
+      <p>
+        <strong>Why not just re-download?</strong> Re-fetching the whole file defeats the purpose
+        of a download manager. On a 6&nbsp;GB image with one bad 4&nbsp;MB chunk, targeted repair
+        moves roughly <strong>1,500&times; less data</strong> than a full restart.
+      </p>
+    </div>
+  </section>
+
+  <!-- ================= DIAGRAM ================= -->
+  <section id="diagram">
+    <h2><span class="num">04</span>Sequence diagram</h2>
+    <figure class="diagram">
+      <div class="frame">
+        <svg viewBox="0 0 1000 620" role="img" aria-labelledby="seqTitle seqDesc" xmlns="http://www.w3.org/2000/svg">
+          <title id="seqTitle">Sequence diagram: checksum verification and intelligent repair</title>
+          <desc id="seqDesc">The renderer requests verification after download completion. The verifier computes the file hash and returns a result. If the hash matches the download is marked verified. If it mismatches, the repair engine locates corrupted chunks using per-chunk hashes or a binary search, selects the best interface via the bandit model, re-fetches only those chunks, re-verifies, and reports the final status.</desc>
+
+          <defs>
+            <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+            </marker>
+            <marker id="arwG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0d9488"/>
+            </marker>
+            <marker id="arwR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#b91c1c"/>
+            </marker>
+          </defs>
+
+          <!-- Lifeline headers -->
+          <g font-family="ui-sans-serif, system-ui, sans-serif" font-size="12.5" font-weight="700" text-anchor="middle">
+            <rect x="40"  y="16" width="140" height="38" rx="9" fill="#312e81"/>
+            <text x="110" y="40" fill="#ffffff">Renderer / UI</text>
+
+            <rect x="290" y="16" width="140" height="38" rx="9" fill="#4f46e5"/>
+            <text x="360" y="40" fill="#ffffff">Download Manager</text>
+
+            <rect x="540" y="16" width="140" height="38" rx="9" fill="#0d9488"/>
+            <text x="610" y="40" fill="#ffffff">checksum.ts</text>
+
+            <rect x="740" y="16" width="140" height="38" rx="9" fill="#b45309"/>
+            <text x="810" y="40" fill="#ffffff">Repair + Bandit</text>
+          </g>
+
+          <!-- Lifelines -->
+          <g stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="5 5">
+            <line x1="110" y1="54" x2="110" y2="596"/>
+            <line x1="360" y1="54" x2="360" y2="596"/>
+            <line x1="610" y1="54" x2="610" y2="596"/>
+            <line x1="810" y1="54" x2="810" y2="596"/>
+          </g>
+
+          <!-- Messages -->
+          <g font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#334155">
+
+            <!-- 1 -->
+            <line x1="110" y1="96" x2="356" y2="96" stroke="#475569" stroke-width="1.6" marker-end="url(#arw)"/>
+            <text x="235" y="88" text-anchor="middle">all chunks assembled</text>
+
+            <!-- 2 -->
+            <line x1="360" y1="136" x2="606" y2="136" stroke="#475569" stroke-width="1.6" marker-end="url(#arw)"/>
+            <text x="483" y="128" text-anchor="middle">verifyDownload(id, expectedHash)</text>
+
+            <!-- 3 self loop on checksum.ts -->
+            <path d="M 610 176 h 55 v 36 h -55" fill="none" stroke="#475569" stroke-width="1.6" marker-end="url(#arw)"/>
+            <text x="676" y="198" text-anchor="start">computeFileHash() &mdash; streamed, SHA-256</text>
+
+            <!-- 4 -->
+            <line x1="610" y1="246" x2="364" y2="246" stroke="#475569" stroke-width="1.6" marker-end="url(#arw)"/>
+            <text x="487" y="238" text-anchor="middle">VerificationResult { match, actualHash }</text>
+
+            <!-- 5 success path -->
+            <line x1="360" y1="286" x2="114" y2="286" stroke="#0d9488" stroke-width="1.6" marker-end="url(#arwG)"/>
+            <text x="237" y="278" text-anchor="middle" fill="#0f766e">match = true &rarr; status "Verified"</text>
+
+            <!-- 6 mismatch branch -->
+            <line x1="360" y1="330" x2="806" y2="330" stroke="#b91c1c" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#arwR)"/>
+            <text x="583" y="322" text-anchor="middle" fill="#b91c1c">match = false &rarr; repairCorruptedChunks(ranges)</text>
+
+            <!-- 7 self loop on repair -->
+            <path d="M 810 370 h 52 v 36 h -52" fill="none" stroke="#475569" stroke-width="1.6" marker-end="url(#arw)"/>
+            <text x="874" y="392" text-anchor="start">locate bad chunks (A / B)</text>
+
+            <!-- 8 self loop on repair -->
+            <path d="M 810 440 h 52 v 36 h -52" fill="none" stroke="#475569" stroke-width="1.6" marker-end="url(#arw)"/>
+            <text x="874" y="462" text-anchor="start">bandit picks interface</text>
+
+            <!-- 9 -->
+            <line x1="810" y1="510" x2="614" y2="510" stroke="#475569" stroke-width="1.6" marker-end="url(#arw)"/>
+            <text x="712" y="502" text-anchor="middle">re-verify repaired file</text>
+
+            <!-- 10 -->
+            <line x1="610" y1="546" x2="806" y2="546" stroke="#475569" stroke-width="1.6" marker-end="url(#arw)"/>
+            <text x="708" y="538" text-anchor="middle">result</text>
+
+            <!-- 11 -->
+            <line x1="810" y1="582" x2="114" y2="582" stroke="#475569" stroke-width="1.6" marker-end="url(#arw)"/>
+            <text x="462" y="574" text-anchor="middle">final status: Verified &check; / Repairing x/y / Failed</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>
+        Green = success path. Red dashed = mismatch branch that enters the repair engine.
+        Steps 7&ndash;10 repeat up to <strong>3 times</strong> before the task is flagged for manual intervention.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ================= UX ================= -->
+  <section id="ux">
+    <h2><span class="num">05</span>User experience</h2>
+    <p>The download row gains a verification indicator that moves through these states:</p>
+
+    <div class="states">
+      <span class="state"><span class="dot gray"></span>Skipped (no hash)</span>
+      <span class="state"><span class="dot blue"></span>Verifying&hellip;</span>
+      <span class="state"><span class="dot green"></span>Verified &check;</span>
+      <span class="state"><span class="dot amber"></span>Repairing (chunk 12/45)&hellip;</span>
+      <span class="state"><span class="dot red"></span>Failed &mdash; manual action</span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Surface</th><th>Addition</th><th>Behaviour</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>New Download dialog</td>
+            <td>Optional "Checksum" field</td>
+            <td>Accepts <code class="inline">sha256:&lt;hex&gt;</code>, bare hex, or base64 MD5. Algorithm inferred, or overridden via a small dropdown.</td>
+          </tr>
+          <tr>
+            <td>Download row</td>
+            <td>Status pill + progress</td>
+            <td>Shows the five states above. Repair progress reports the chunk index out of the total corrupted set.</td>
+          </tr>
+          <tr>
+            <td>Completed downloads</td>
+            <td>"Manual Verify" button</td>
+            <td>Re-runs verification on demand. If it fails, the same repair engine is invoked.</td>
+          </tr>
+          <tr>
+            <td>Toast / notification</td>
+            <td>Integrity notice</td>
+            <td>Notifies on first mismatch and on final failure, so a repair running in the background is never silent.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================= ARCHITECTURE ================= -->
+  <section id="architecture">
+    <h2><span class="num">06</span>Technical architecture</h2>
+
+    <h3>File map</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Path</th><th>Change</th><th>Responsibility</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code class="inline">plexo/src/main/download/checksum.ts</code></td>
+            <td><span class="tag new">new</span></td>
+            <td>Hashing, header/sidecar detection, and the repair orchestrator.</td>
+          </tr>
+          <tr>
+            <td><code class="inline">plexo/src/main/download/manager.ts</code></td>
+            <td><span class="tag mod">modified</span></td>
+            <td>Calls <code class="inline">verifyDownload()</code> after the final chunk write; persists repair state.</td>
+          </tr>
+          <tr>
+            <td><code class="inline">plexo/src/main/download/learning/bandit.ts</code></td>
+            <td><span class="tag ok">reused</span></td>
+            <td>Supplies the interface ranking for re-fetching corrupted chunks.</td>
+          </tr>
+          <tr>
+            <td><code class="inline">plexo/src/renderer/…</code></td>
+            <td><span class="tag mod">modified</span></td>
+            <td>Checksum input, status pill, repair progress, Manual Verify button.</td>
+          </tr>
+          <tr>
+            <td><code class="inline">test-fixtures/</code></td>
+            <td><span class="tag mod">modified</span></td>
+            <td>Small fixture files with deliberately corrupted chunks.</td>
+          </tr>
+          <tr>
+            <td><code class="inline">HOW-PLEXO-WORKS.md</code></td>
+            <td><span class="tag mod">modified</span></td>
+            <td>New "Verification &amp; Repair" section.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Module API</h3>
+<pre><span class="c">// plexo/src/main/download/checksum.ts</span>
+
+<span class="k">export type</span> HashAlgorithm = <span class="s">'md5'</span> | <span class="s">'sha1'</span> | <span class="s">'sha256'</span>;
+
+<span class="k">export type</span> VerificationStatus =
+  | <span class="s">'skipped'</span>   <span class="c">// no expected hash could be resolved</span>
+  | <span class="s">'verifying'</span>
+  | <span class="s">'verified'</span>
+  | <span class="s">'repairing'</span>
+  | <span class="s">'failed'</span>;
+
+<span class="k">export interface</span> VerificationResult {
+  match: <span class="k">boolean</span>;
+  algorithm: HashAlgorithm;
+  expectedHash: <span class="k">string</span>;
+  actualHash: <span class="k">string</span>;
+  corruptedRanges?: ByteRange[];  <span class="c">// populated on mismatch</span>
+}
+
+<span class="c">/** Streamed hash — constant memory, safe for multi-GB files. */</span>
+<span class="k">export function</span> <span class="f">computeFileHash</span>(
+  filePath: <span class="k">string</span>,
+  algorithm: HashAlgorithm
+): <span class="k">Promise</span>&lt;<span class="k">string</span>&gt;;
+
+<span class="c">/** Resolve an expected hash from input, headers, or a sidecar file. */</span>
+<span class="k">export function</span> <span class="f">resolveExpectedHash</span>(
+  downloadId: <span class="k">string</span>,
+  explicit?: <span class="k">string</span>
+): <span class="k">Promise</span>&lt;{ hash: <span class="k">string</span>; algorithm: HashAlgorithm } | <span class="k">null</span>&gt;;
+
+<span class="c">/** Entry point, called by the download manager on completion. */</span>
+<span class="k">export function</span> <span class="f">verifyDownload</span>(
+  downloadId: <span class="k">string</span>,
+  expectedHash: <span class="k">string</span>
+): <span class="k">Promise</span>&lt;VerificationResult&gt;;
+
+<span class="c">/** Strategy A or B, then re-fetch via the bandit-ranked interface. */</span>
+<span class="k">export function</span> <span class="f">repairCorruptedChunks</span>(
+  downloadId: <span class="k">string</span>,
+  corruptedRanges: ByteRange[]
+): <span class="k">Promise</span>&lt;<span class="k">void</span>&gt;;
+</pre>
+
+    <h3>Task metadata extension</h3>
+<pre>{
+  <span class="s">"id"</span>: <span class="s">"dl_8f3a…"</span>,
+  <span class="s">"url"</span>: <span class="s">"https://example.org/ubuntu-24.04.iso"</span>,
+  <span class="s">"expectedHash"</span>: <span class="s">"sha256:9b2c1f…"</span>,
+  <span class="s">"hashAlgorithm"</span>: <span class="s">"sha256"</span>,
+  <span class="s">"verificationStatus"</span>: <span class="s">"verified"</span>,
+  <span class="s">"repairAttempts"</span>: <span class="n">1</span>,
+  <span class="s">"chunkHashes"</span>: [<span class="s">"a41d…"</span>, <span class="s">"7c90…"</span>, <span class="s">"…"</span>]   <span class="c">// optional, Strategy A only</span>
+}</pre>
+
+    <div class="callout info">
+      <p>
+        <strong>No new dependencies.</strong> Everything is built on Node's
+        <code class="inline">crypto</code> module and the existing chunk map. The verifier streams the
+        file rather than buffering it, so memory use stays flat regardless of file size.
+      </p>
+    </div>
+  </section>
+
+  <!-- ================= INTERFACE SELECTION ================= -->
+  <section id="interface">
+    <h2><span class="num">07</span>Interface selection for repair</h2>
+    <p>
+      A repair is a small, high-value transfer, so it should not simply reuse whatever link
+      happens to be active. The repair engine queries the existing contextual bandit in
+      <code class="inline">learning/bandit.ts</code> for a ranked list of interfaces, then:
+    </p>
+    <ul>
+      <li>Picks the highest-ranked interface that is currently up.</li>
+      <li>Falls back to the next-ranked interface if the chosen one fails or stalls.</li>
+      <li>Respects per-adapter data quotas configured in the CLI, so a repair never quietly
+          blows through a metered hotspot's cap.</li>
+    </ul>
+    <div class="callout good">
+      <p>
+        Because the bandit already tracks throughput, latency jitter, and time-of-day patterns,
+        repairs automatically favour the link that has historically been most reliable &mdash;
+        without any new learning logic.
+      </p>
+    </div>
+  </section>
+
+  <!-- ================= CLI ================= -->
+  <section id="cli">
+    <h2><span class="num">08</span>CLI usage</h2>
+    <p>Where the project exposes a CLI entry point, verification is opt-in via a flag:</p>
+<pre><span class="c"># Verify against a SHA-256 digest</span>
+plexo download https://example.org/ubuntu-24.04.iso \
+  --checksum sha256:9b2c1f4e…
+
+<span class="c"># MD5, bare hex (algorithm inferred by length)</span>
+plexo download https://example.org/tool.zip --checksum 5d41402abc4b2a76b9719d911017c592
+
+<span class="c"># Auto-detect from a sidecar file next to the target</span>
+plexo download https://example.org/data.tar.gz --checksum auto</pre>
+  </section>
+
+  <!-- ================= EDGE CASES ================= -->
+  <section id="edge">
+    <h2><span class="num">09</span>Edge cases</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Situation</th><th>Expected behaviour</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>No checksum supplied and none detectable</td>
+            <td>Verification is <span class="tag ok">skipped</span>. Download proceeds exactly as before the feature existed.</td>
+          </tr>
+          <tr>
+            <td>Unrecognised algorithm string</td>
+            <td>Fall back to SHA-256 and log a warning; never hard-fail the download over a parse error.</td>
+          </tr>
+          <tr>
+            <td>Target file already exists</td>
+            <td>Verify the existing file first. If it matches, skip the download entirely.</td>
+          </tr>
+          <tr>
+            <td>App closed mid-repair</td>
+            <td>Repair state is persisted with the chunk map; the repair resumes on next launch.</td>
+          </tr>
+          <tr>
+            <td>Selected interface dies mid-repair</td>
+            <td>Automatically re-queue the remaining chunks on the next-ranked interface from the bandit.</td>
+          </tr>
+          <tr>
+            <td>Repair fails 3 times</td>
+            <td>Status becomes <span class="tag fail">failed</span>; corrupted chunk indices are written to the log for manual diagnosis.</td>
+          </tr>
+          <tr>
+            <td>Source changed since chunks were fetched</td>
+            <td>Re-verify <code class="inline">ETag</code>/<code class="inline">Last-Modified</code> before re-fetching; if changed, abort repair rather than mix versions.</td>
+          </tr>
+          <tr>
+            <td>Torrent downloads</td>
+            <td>Out of scope. Torrent piece verification already handles integrity.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================= TESTING ================= -->
+  <section id="testing">
+    <h2><span class="num">10</span>Testing plan</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Layer</th><th>Test</th><th>Asserts</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Unit</td>
+            <td><code class="inline">checksum.spec.ts</code></td>
+            <td><code class="inline">computeFileHash()</code> returns the known digest for each fixture under <code class="inline">test-fixtures/</code>, for MD5, SHA-1, and SHA-256.</td>
+          </tr>
+          <tr>
+            <td>Unit</td>
+            <td><code class="inline">resolveExpectedHash.spec.ts</code></td>
+            <td>Header, sidecar, and explicit-input paths each resolve correctly; unknown algorithm defaults to SHA-256.</td>
+          </tr>
+          <tr>
+            <td>Integration</td>
+            <td><code class="inline">repair.spec.ts</code></td>
+            <td>A fixture with one deliberately corrupted chunk triggers a re-fetch of <em>only</em> that chunk (asserted against the mock transport's request log).</td>
+          </tr>
+          <tr>
+            <td>Integration</td>
+            <td><code class="inline">repair-strategy-b.spec.ts</code></td>
+            <td>With no per-chunk hashes, the binary search narrows to the correct chunk range in the expected number of hash passes.</td>
+          </tr>
+          <tr>
+            <td>E2E</td>
+            <td><code class="inline">e2e/checksum.spec.ts</code></td>
+            <td>Start a download with a checksum, simulate a mismatch, assert the "Repairing" state appears and the task ends <span class="tag ok">Verified</span>.</td>
+          </tr>
+          <tr>
+            <td>Regression</td>
+            <td>Existing suites</td>
+            <td>Auto-Organize, Network Learning, and Speed Testing tests remain green.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================= DELTA ================= -->
+  <section id="delta">
+    <h2><span class="num">11</span>New vs. existing</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Aspect</th><th>Before this feature</th><th>With this feature</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>End-to-end integrity</td>
+            <td>Resume-time <code class="inline">ETag</code>/<code class="inline">Last-Modified</code> check only.</td>
+            <td>Full-file checksum comparison after assembly.</td>
+          </tr>
+          <tr>
+            <td>Corruption recovery</td>
+            <td>Delete and restart the download.</td>
+            <td>Re-fetch only the corrupted byte ranges.</td>
+          </tr>
+          <tr>
+            <td>Repair interface choice</td>
+            <td>N/A</td>
+            <td>Ranked by the existing contextual bandit.</td>
+          </tr>
+          <tr>
+            <td>User visibility</td>
+            <td>No integrity indicator.</td>
+            <td>Five-state status pill, repair progress, and a Manual Verify button.</td>
+          </tr>
+          <tr>
+            <td>CLI</td>
+            <td>No checksum flag.</td>
+            <td><code class="inline">--checksum</code> accepts explicit, bare, or <code class="inline">auto</code>.</td>
+          </tr>
+          <tr>
+            <td>Dependencies</td>
+            <td>&mdash;</td>
+            <td>None added; Node <code class="inline">crypto</code> only.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================= DOD ================= -->
+  <section id="dod">
+    <h2><span class="num">12</span>Definition of done</h2>
+    <div class="card">
+      <ul class="checklist">
+        <li><span class="box">✓</span><span><code class="inline">checksum.ts</code> implemented and exported with the API above.</span></li>
+        <li><span class="box">✓</span><span>Verification wired into the download completion handler in <code class="inline">manager.ts</code>.</span></li>
+        <li><span class="box">✓</span><span>Both repair strategies implemented, with per-chunk hashes preferred when available.</span></li>
+        <li><span class="box">✓</span><span>Repair interface selection delegated to <code class="inline">learning/bandit.ts</code>, with fallback on failure.</span></li>
+        <li><span class="box">✓</span><span>UI: checksum field, status pill, repair progress, Manual Verify button.</span></li>
+        <li><span class="box">✓</span><span>Repair state persisted and resumable across app restarts.</span></li>
+        <li><span class="box">✓</span><span>Unit, integration, and Playwright E2E tests passing.</span></li>
+        <li><span class="box">✓</span><span>No regressions in Auto-Organize, Network Learning, or Speed Testing suites.</span></li>
+        <li><span class="box">✓</span><span><code class="inline">HOW-PLEXO-WORKS.md</code> updated with the verification and repair section.</span></li>
+        <li><span class="box">✓</span><span>No new runtime dependencies.</span></li>
+        <li><span class="box">✓</span><span>Merged to <code class="inline">main</code> only via PR from <code class="inline">feature/checksum-verification-repair</code>.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <footer class="doc">
+    <span>Wifi-Merger &middot; Feature 05 &middot; Checksum Verification &amp; Intelligent Chunk Repair</span>
+    <span>Branch: <code class="inline">feature/checksum-verification-repair</code></span>
+  </footer>
+
+</div>
+</body>
+</html>
