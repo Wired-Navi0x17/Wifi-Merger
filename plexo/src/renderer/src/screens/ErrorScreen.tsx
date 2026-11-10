@@ -1,6 +1,7 @@
 import type { DownloadState } from '@shared/types'
 import { Folder } from 'lucide-react'
 import { useState } from 'react'
+import { ChecksumPanel } from '../components/ChecksumPanel'
 import { DetailHeader } from '../components/DetailHeader'
 import { TruncatedText } from '../components/TruncatedText'
 import {
@@ -17,7 +18,11 @@ export function ErrorScreen({ download }: { download: DownloadState }): React.JS
   const cancelled = download.status === 'cancelled'
   const knownSize = download.totalBytes > 0
   const percent = knownSize ? formatPercent(download.bytesDownloaded, wantedBytes(download)) : 0
-  const heading = cancelled ? 'Download cancelled' : 'Download failed'
+  const heading = cancelled
+    ? 'Download cancelled'
+    : download.kind === 'http' && download.checksum?.status === 'failed'
+      ? 'Checksum mismatch'
+      : 'Download failed'
   const description = cancelled
     ? 'The download was stopped before finishing.'
     : download.error
@@ -100,6 +105,10 @@ export function ErrorScreen({ download }: { download: DownloadState }): React.JS
               {description}
             </div>
           </div>
+
+          {download.kind === 'http' && download.checksum && (
+            <ChecksumPanel checksum={download.checksum} downloadId={download.id} />
+          )}
 
           {/* File capsule */}
           <div className="flex w-full items-center gap-[11px] rounded-none border-[0.5px] border-border bg-background p-[10px_12px] text-left">

@@ -52,6 +52,8 @@ export interface IpcContract {
   chooseTorrentFiles: { args: [id: string, selected: number[]]; result: void }
   pauseDownload: { args: [id: string]; result: void }
   resumeDownload: { args: [id: string]; result: void }
+  /** Enhancement 5: publishes a download whose checksum check failed, unverified. */
+  skipChecksum: { args: [id: string]; result: void }
   /** A fresh link to the same file, for a download whose link stopped working; it resumes. */
   relinkDownload: { args: [id: string, url: string]; result: void }
   setDownloadNetwork: { args: [id: string, networkId: string, enabled: boolean]; result: void }
@@ -83,4 +85,22 @@ export interface IpcContract {
   /** Stops the running speed test: startSpeedTest resolves with what was measured, marked
    * cancelled. */
   cancelSpeedTest: { args: []; result: void }
+  sourcesList: { args: []; result: import('./sourceTypes').ContentSourceConfig[] }
+  sourcesAdd: {
+    args: [url: string, name?: string, forcedType?: import('./sourceTypes').SourceType]
+    result: import('./sourceTypes').ContentSourceConfig
+  }
+  sourcesRemove: { args: [id: string]; result: void }
+  sourcesToggle: { args: [id: string, enabled: boolean]; result: void }
+  sourcesSync: { args: [id: string]; result: number }
+  contentSearch: {
+    args: [query: import('./sourceTypes').SearchQuery]
+    result: import('./sourceTypes').SourceSearchResult[]
+  }
+  contentDiscover: { args: []; result: import('./sourceTypes').ContentItem[] }
+  contentResolve: {
+    args: [item: import('./sourceTypes').ContentItem]
+    result: import('./sourceTypes').ResolvedDownload
+  }
+  openExternalUrl: { args: [url: string]; result: void }
 }

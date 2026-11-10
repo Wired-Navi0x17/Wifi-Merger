@@ -2,6 +2,7 @@ import { SPEED_HISTORY_SECONDS, type DownloadState } from '@shared/types'
 import { AlertTriangle, Folder } from 'lucide-react'
 import { memo, useEffect, useState } from 'react'
 import { BlockGrid } from '../components/BlockGrid'
+import { ChecksumPanel } from '../components/ChecksumPanel'
 import { ColorBadge } from '../components/ColorBadge'
 import { CombineDiagram } from '../components/CombineDiagram'
 import { CyclableChip } from '../components/CyclableChip'
@@ -316,6 +317,17 @@ export const DownloadingScreen = memo(function DownloadingScreen({
 
       {/* File info — always visible, never shrinks */}
       <div className="shrink-0 p-[16px_20px_0px]">
+        {download.kind === 'http' && download.checksum && (
+          <div className="mb-3">
+            <ChecksumPanel
+              checksum={download.checksum}
+              networkName={(id) => {
+                const row = rows.find((entry) => entry.id === id)
+                return row ? networkVisual(row.id, row.kind, row.label).name : id
+              }}
+            />
+          </div>
+        )}
         <div className="flex items-center gap-[14px]">
           <div className="flex size-11 shrink-0 items-center justify-center rounded-none border-[0.5px] border-[var(--border-strong)] bg-card font-mono text-[10.5px] leading-none font-bold tracking-[0.04em] text-[var(--text-secondary)]">
             {isFolder(download) ? (

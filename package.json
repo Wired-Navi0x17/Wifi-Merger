@@ -1,0 +1,15 @@
+{
+  "name": "wifi-merger-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Plexo Multi-Interface Bonding & Unified Discovery Download Manager",
+  "scripts": {
+    "dev": "./run-dev.sh",
+    "build": "npm --prefix plexo run build",
+    "start": "npm --prefix plexo run start",
+    "typecheck": "npm --prefix plexo run typecheck",
+    "lint": "npm --prefix plexo run lint",
+    "format": "npm --prefix plexo run format",
+    "test": "npm --prefix plexo test"
+  }
+}

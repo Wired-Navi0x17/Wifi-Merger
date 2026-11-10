@@ -50,6 +50,7 @@ const plexoApi = {
     invoke('chooseTorrentFiles', downloadId, selected),
   pauseDownload: (downloadId: string) => invoke('pauseDownload', downloadId),
   resumeDownload: (downloadId: string) => invoke('resumeDownload', downloadId),
+  skipChecksum: (downloadId: string) => invoke('skipChecksum', downloadId),
   relinkDownload: (downloadId: string, url: string) => invoke('relinkDownload', downloadId, url),
   setDownloadNetwork: (downloadId: string, networkId: string, enabled: boolean) =>
     invoke('setDownloadNetwork', downloadId, networkId, enabled),
@@ -69,6 +70,20 @@ const plexoApi = {
   resumeFromLink: (linkId: string, downloadId: string) =>
     invoke('resumeFromLink', linkId, downloadId),
   dismissLink: (id: string) => invoke('dismissLink', id),
+  sources: {
+    list: () => invoke('sourcesList'),
+    add: (url: string, name?: string, forcedType?: import('../shared/sourceTypes').SourceType) =>
+      invoke('sourcesAdd', url, name, forcedType),
+    remove: (id: string) => invoke('sourcesRemove', id),
+    toggle: (id: string, enabled: boolean) => invoke('sourcesToggle', id, enabled),
+    sync: (id: string) => invoke('sourcesSync', id)
+  },
+  content: {
+    search: (query: import('../shared/sourceTypes').SearchQuery) => invoke('contentSearch', query),
+    discover: () => invoke('contentDiscover'),
+    resolve: (item: import('../shared/sourceTypes').ContentItem) => invoke('contentResolve', item)
+  },
+  openExternalUrl: (url: string) => invoke('openExternalUrl', url),
 
   /** pendingLinks() has the new link. */
   onLinkReceived: (callback: () => void): (() => void) => {

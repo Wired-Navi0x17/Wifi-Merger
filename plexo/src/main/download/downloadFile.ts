@@ -33,6 +33,16 @@ export class DownloadFile {
     }
   }
 
+  /** Enhancement 5: overwrites a range in place, for a block repaired after a checksum mismatch. */
+  async write(position: number, data: Buffer): Promise<void> {
+    const handle = await open(this.path, 'r+')
+    try {
+      await handle.write(data, 0, data.length, position)
+    } finally {
+      await handle.close()
+    }
+  }
+
   /** Flushes the staging file before a recovery checkpoint or final publication. */
   async sync(): Promise<void> {
     const handle = await open(this.path, 'r+')

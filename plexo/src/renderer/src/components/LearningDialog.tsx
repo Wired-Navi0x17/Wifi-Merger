@@ -15,6 +15,8 @@ export function LearningDialog({
 }): React.JSX.Element {
   const tailAdaptive = useAppStore((store) => store.learningTailAdaptive)
   const setLearningTailAdaptive = useAppStore((store) => store.setLearningTailAdaptive)
+  const congestionFriendly = useAppStore((store) => store.congestionFriendly)
+  const setCongestionFriendly = useAppStore((store) => store.setCongestionFriendly)
   const [forgetting, setForgetting] = useState(false)
   const [forgotten, setForgotten] = useState(false)
 
@@ -46,6 +48,16 @@ export function LearningDialog({
           Off (the default): Plexo keeps learning but never changes a download. On: the last part of
           each download may use more or fewer streams and start its fallback earlier, following the
           learned host profile. HTTP single files only; torrents are never affected.
+        </p>
+        <label>
+          <Switch checked={congestionFriendly} onCheckedChange={setCongestionFriendly} /> Keep ping
+          low while downloading (bufferbloat control)
+        </label>
+        <p>
+          On (the default): Plexo measures each network&apos;s round-trip time. When ping rises well
+          above the lowest seen, the router&apos;s queue is filling, so Plexo stops adding streams
+          or drops a quarter of them, and the pipe stays full without the queue. Off: streams grow
+          until the server refuses, which is fastest on a link nobody else is using.
         </p>
         <div>
           <Button type="button" variant="secondary" disabled={forgetting} onClick={forget}>

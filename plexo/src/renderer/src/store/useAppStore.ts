@@ -14,14 +14,16 @@ import type {
   ThemeSource,
   WindowMaterial
 } from '@shared/types'
+import type { ContentCategory, ContentItem, ContentSourceConfig } from '@shared/sourceTypes'
 import { create } from 'zustand'
 
 export type DownloadFilter = 'all' | 'progress' | 'finished' | 'failed'
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 
-/** What the window shows: the list of downloads, or one download. */
-export type View = { name: 'list' } | { name: 'download'; id: string }
+/** What the window shows: downloads list, single download, discovery grid, or source index manager. */
+export type View =
+  { name: 'list' } | { name: 'download'; id: string } | { name: 'discover' } | { name: 'sources' }
 
 interface AppStore {
   interfaces: NetworkInterfaceInfo[]
@@ -111,6 +113,31 @@ interface AppStore {
   /** Feature 2: acts on what the local learner found (settings.learning.tailAdaptive). */
   learningTailAdaptive: boolean
   setLearningTailAdaptive: (on: boolean) => void
+  /** Feature 6: bufferbloat control (settings.congestionMode). */
+  congestionFriendly: boolean
+  setCongestionFriendly: (on: boolean) => void
+
+  /** Feature 5: Unified Source Index & Discovery */
+  sources: ContentSourceConfig[]
+  sourcesLoading: boolean
+  searchResults: ContentItem[]
+  searchQuery: string
+  searchCategory: ContentCategory | undefined
+  isSearching: boolean
+  searchError: string | null
+  selectedContentItem: ContentItem | null
+  contentDetailsOpen: boolean
+  loadSources: () => Promise<void>
+  addSource: (url: string, name?: string) => Promise<ContentSourceConfig>
+  toggleSource: (id: string, enabled: boolean) => Promise<void>
+  removeSource: (id: string) => Promise<void>
+  syncSource: (id: string) => Promise<void>
+  setSearchQuery: (query: string) => void
+  setSearchCategory: (category: ContentCategory | undefined) => void
+  performSearch: (queryOverride?: string) => Promise<void>
+  loadDiscoverCatalog: () => Promise<void>
+  openContentDetails: (item: ContentItem) => void
+  closeContentDetails: () => void
 }
 
 // Settings saved by the main process, read once before the first paint (see InitialState).
@@ -159,6 +186,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
   destinationDir: initial.destinationDir ?? initial.downloadsDir,
   autoOrganize: initial.autoOrganize,
   learningTailAdaptive: initial.learningTailAdaptive,
+  congestionFriendly: initial.congestionMode !== 'throughput',
+
+  sources: [],
+  sourcesLoading: false,
+  searchResults: [],
+  searchQuery: '',
+  searchCategory: undefined,
+  isSearching: false,
+  searchError: null,
+  selectedContentItem: null,
+  contentDetailsOpen: false,
 
   loadInterfaces: async () => {
     // A re-scan keeps showing the last result rather than flashing back to 'loading'.
@@ -316,5 +354,104 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setLearningTailAdaptive: (on) => {
     set({ learningTailAdaptive: on })
     persist({ learning: { tailAdaptive: on } })
-  }
+  },
+
+  setCongestionFriendly: (on) => {
+    set({ congestionFriendly: on })
+    // Only throughput is saved; clearing the field means friendly.
+    persist({ congestionMode: on ? undefined : 'throughput' })
+  },
+
+  loadSources: async () => {
+    set({ sourcesLoading: true })
+    try {
+      const sources = await window.plexo.sources.list()
+      set({ sources, sourcesLoading: false })
+    } catch {
+      set({ sourcesLoading: false })
+    }
+  },
+
+  addSource: async (url, name) => {
+    const created = await window.plexo.sources.add(url, name)
+    await get().loadSources()
+    return created
+  },
+
+  toggleSource: async (id, enabled) => {
+    await window.plexo.sources.toggle(id, enabled)
+    await get().loadSources()
+    if (!enabled) {
+      set((state) => ({
+        searchResults: state.searchResults.filter((item) => item.sourceId !== id)
+      }))
+    }
+    if (get().searchQuery) {
+      void get().performSearch(get().searchQuery)
+    } else {
+      void get().loadDiscoverCatalog()
+    }
+  },
+
+  removeSource: async (id) => {
+    await window.plexo.sources.remove(id)
+    await get().loadSources()
+    set((state) => ({
+      searchResults: state.searchResults.filter((item) => item.sourceId !== id)
+    }))
+    if (get().searchQuery) {
+      void get().performSearch(get().searchQuery)
+    } else {
+      void get().loadDiscoverCatalog()
+    }
+  },
+
+  syncSource: async (id) => {
+    await window.plexo.sources.sync(id)
+    await get().loadSources()
+  },
+
+  setSearchQuery: (searchQuery) => set({ searchQuery }),
+
+  setSearchCategory: (searchCategory) => set({ searchCategory }),
+
+  performSearch: async (queryOverride) => {
+    const term = (queryOverride !== undefined ? queryOverride : get().searchQuery).trim()
+    set({ isSearching: true, searchError: null })
+    try {
+      if (!term) {
+        const items = await window.plexo.content.discover()
+        set({ searchResults: items, isSearching: false })
+      } else {
+        const results = await window.plexo.content.search({
+          query: term,
+          category: get().searchCategory
+        })
+        const items = results.flatMap((r) => r.items)
+        set({ searchResults: items, isSearching: false })
+      }
+    } catch (err) {
+      set({
+        isSearching: false,
+        searchError: err instanceof Error ? err.message : String(err)
+      })
+    }
+  },
+
+  loadDiscoverCatalog: async () => {
+    set({ isSearching: true, searchError: null })
+    try {
+      const items = await window.plexo.content.discover()
+      set({ searchResults: items, isSearching: false })
+    } catch (err) {
+      set({
+        isSearching: false,
+        searchError: err instanceof Error ? err.message : String(err)
+      })
+    }
+  },
+
+  openContentDetails: (item) => set({ selectedContentItem: item, contentDetailsOpen: true }),
+
+  closeContentDetails: () => set({ selectedContentItem: null, contentDetailsOpen: false })
 }))

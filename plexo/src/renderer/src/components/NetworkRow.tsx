@@ -1,4 +1,10 @@
-import type { HttpBlockState, HttpStreamState, NetworkStatus, SpeedUnit } from '@shared/types'
+import type {
+  HttpBlockState,
+  HttpStreamState,
+  NetworkStatus,
+  PathStats,
+  SpeedUnit
+} from '@shared/types'
 import { useState } from 'react'
 import { DANGER, type NetworkVisual } from '../theme'
 import type { HttpNetworkGroup, NetworkGroup, TorrentNetworkGroup } from '../utils/format'
@@ -206,6 +212,42 @@ function HttpStreamRows({
         )
       })}
     </>
+  )
+}
+
+/** Feature 6: the network's ping, and how much of it is waiting in a queue. */
+function PathChip({ path }: { path: PathStats }): React.JSX.Element {
+  const bloated = path.queueDelayMs > Math.max(2 * path.minRttMs, 30)
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            tabIndex={0}
+            className={`rounded-sm font-mono text-[10px] whitespace-nowrap tabular-nums outline-none ${bloated ? 'text-destructive' : 'text-muted-foreground'}`}
+          >
+            {path.srttMs} ms
+            {path.queueDelayMs > 0 && <span> (+{path.queueDelayMs} queue)</span>}
+          </span>
+        }
+      />
+      <TooltipContent>
+        <div className="font-mono text-[11px] leading-[1.5]">
+          <div>
+            RTT now {path.srttMs} ms · lowest {path.minRttMs} ms
+          </div>
+          <div>Waiting in a queue: {path.queueDelayMs} ms</div>
+          <div>Fills the pipe (BDP): {formatBytes(path.bdpBytes)}</div>
+          {path.phase && (
+            <div>
+              {path.phase === 'slow-start'
+                ? 'Growing: doubling streams'
+                : 'Pipe full: +1 at a time'}
+            </div>
+          )}
+        </div>
+      </TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -434,6 +476,9 @@ export function NetworkRow({
                 {expanded ? '▲' : '▼'}
               </span>
             </Button>
+          )}
+          {group.transfer === 'http' && group.path && group.status === 'on' && (
+            <PathChip path={group.path} />
           )}
           {group.status !== 'on' && (
             <Tooltip disabled={!group.error}>

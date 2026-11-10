@@ -12,6 +12,8 @@ import {
   SPEED_HISTORY_SECONDS,
   type AppSettings,
   type BrowserContext,
+  type ChecksumState,
+  type CongestionMode,
   type DownloadSchedule,
   type DownloadNetwork,
   type DownloadState,
@@ -40,7 +42,7 @@ import { addToHistory, findInHistory, removeFromHistory } from './history'
 import { testKnobs } from '../testKnobs'
 import { DownloadFile } from './downloadFile'
 import { compareSamples, HttpTransfer, pickedStreams, splittable } from './httpTransfer'
-import { normalizeEtag } from './fileVersion'
+import { compareVersion, normalizeEtag } from './fileVersion'
 import { ensureDirectory, pathExists, reserveDestinationPath } from './paths'
 import { resolveOrganizeDir } from './organize'
 import { planBlocks, planDownload, planPieces } from './plan'
@@ -55,6 +57,8 @@ import { TAIL_ARMS, chooseArm, rewardOf, updateBelief } from './learning/bandit'
 import { contextKey } from './learning/context'
 import { recordOutcome } from './learning/profiles'
 import { LearningStore } from './learning/store'
+import { hashFile, MAX_REPAIR_ROUNDS, normalizeChecksum, verifyAndRepair } from './checksum'
+import { fetchRange } from './chunkDownloader'
 import {
   clearSpeeds,
   delay,
@@ -358,6 +362,16 @@ async function ensureDiskSpace(destinationDir: string, requiredBytes: number): P
   }
 }
 
+/** Enhancement 5: the state a new download's checksum starts in; nothing when none (or a bad
+ * one) was given. */
+function checksumStateFor(expected: StartHttpDownloadRequest['checksum']): {
+  checksum?: ChecksumState
+} {
+  if (!expected) return {}
+  const value = normalizeChecksum(expected.algorithm, expected.value)
+  return value ? { checksum: { ...expected, value, status: 'pending' } } : {}
+}
+
 export class DownloadManager {
   private runtimes = new Map<string, DownloadRuntime>()
   /** Downloads whose new link is being checked: two at once could both pass and both resume. */
@@ -378,6 +392,8 @@ export class DownloadManager {
   /** Feature 2: persistent local learning (profiles plus bandit beliefs). */
   private readonly learning = new LearningStore()
   private tailAdaptive = false
+  /** Feature 6: bufferbloat control, friendly unless the user picked throughput. */
+  private congestionMode: CongestionMode = 'friendly'
 
   constructor(
     private getWindow: () => BrowserWindow | null,
@@ -415,6 +431,7 @@ export class DownloadManager {
     }
     this.downloadsAtOnce = settings.downloadsAtOnce ?? DOWNLOADS_AT_ONCE.default
     this.tailAdaptive = settings.learning?.tailAdaptive === true
+    this.congestionMode = settings.congestionMode ?? 'friendly'
     this.limits.configure(settings)
     await this.refreshSchedule()
     this.limitsChanged()
@@ -591,6 +608,7 @@ export class DownloadManager {
       failDownload: (message, discard) => this.failDownload(runtime, message, discard),
       failNetwork: (network, message) => this.failNetwork(runtime, network, message),
       scheduleUpdate: () => this.scheduleUpdate(runtime),
+      congestionMode: () => this.congestionMode,
       // Feature 2: the learner only ever suggests within clamped bounds (see
       // httpTransfer.ts); null keeps today's defaults, and record-only is default.
       suggestTail: () => {
@@ -1040,7 +1058,8 @@ export class DownloadManager {
         startedAt: Date.now(),
         ...(requestPayload.browser && {
           fromBrowser: requestPayload.browser.name ?? 'your browser'
-        })
+        }),
+        ...checksumStateFor(requestPayload.checksum)
       }
       runtime = this.newHttpRuntime(
         state,
@@ -1780,6 +1799,13 @@ export class DownloadManager {
       if (unitsOf(runtime).some((unit) => !isDone(unit))) {
         throw new Error('Download is incomplete — refusing to publish the file')
       }
+      // Enhancement 5: the bytes are checked, and repaired, before the file is published.
+      if (runtime.kind === 'http' && !(await this.verifyChecksum(runtime))) {
+        runtime.publishing = false
+        this.pushUpdate(runtime)
+        await this.persistNow(runtime)
+        return
+      }
       await this.persistNow(runtime)
       const publishedPath = await runtime.file.publish(
         runtime.state.destinationPath,
@@ -1822,6 +1848,156 @@ export class DownloadManager {
 
     this.pushUpdate(runtime)
     if (runtime.state.status === 'completed') await this.moveToHistory(runtime)
+  }
+
+  /**
+   * Enhancement 5: hashes the finished file against its expected checksum and, on a mismatch,
+   * repairs it (see checksum.ts). True when the file may be published: verified, skipped, or no
+   * checksum given. False leaves the download in error, its file kept, for the user to act on:
+   * resume to try another MAX_REPAIR_ROUNDS rounds, or skipChecksum to publish it unverified.
+   */
+  private async verifyChecksum(runtime: HttpDownloadRuntime): Promise<boolean> {
+    const checksum = runtime.state.checksum
+    if (!checksum || checksum.status === 'skipped' || checksum.status === 'verified') return true
+    const { algorithm } = checksum
+    const { url, browser } = runtime.requestPayload
+    await runtime.file.sync()
+    const available = await this.networks.refresh()
+    const usable = runtime.state.networks
+      .filter((network) => network.enabled && available.some((iface) => iface.id === network.id))
+      .map((network) => network.id)
+    const ranked = this.rankNetworksForRepair(runtime, usable)
+    const connections = new Map<string, StreamConnection>()
+    const connectionFor = (networkId: string): StreamConnection => {
+      let connection = connections.get(networkId)
+      if (!connection) {
+        connection = new StreamConnection(() => this.networks.find(networkId), {
+          timeoutMs: testKnobs.stallTimeoutMs,
+          connectTimeoutMs: testKnobs.connectTimeoutMs
+        })
+        connections.set(networkId, connection)
+      }
+      return connection
+    }
+    const version = {
+      etag: runtime.requestPayload.etag,
+      lastModified: runtime.requestPayload.lastModified,
+      totalBytes: runtime.requestPayload.totalBytes
+    }
+    checksum.status = 'verifying'
+    checksum.round = 0
+    this.pushUpdate(runtime)
+    try {
+      const result = await verifyAndRepair(
+        {
+          algorithm,
+          expected: checksum.value,
+          blocks: runtime.blocks,
+          rankedNetworks: ranked,
+          // A server that can't send ranges can't send a block on its own.
+          maxRounds: splittable(runtime.requestPayload) ? MAX_REPAIR_ROUNDS : 0
+        },
+        {
+          hashFile: () => hashFile(algorithm, runtime.file.path),
+          readBlock: (block) =>
+            runtime.file.read(block.rangeStart, (block.rangeEnd ?? 0) - block.rangeStart + 1),
+          fetchBlock: async (block, networkId) => {
+            const remote = await fetchRange(
+              url,
+              block.rangeStart,
+              block.rangeEnd ?? block.rangeStart,
+              connectionFor(networkId),
+              browser
+            )
+            if (compareVersion([version], remote.version).kind !== 'same') {
+              throw new Error('The file changed on the server while it was being repaired')
+            }
+            return remote.body
+          },
+          writeBlock: (block, data) => runtime.file.write(block.rangeStart, data),
+          onPhase: (phase) => {
+            checksum.status = phase.phase
+            checksum.round = phase.round
+            if (phase.phase === 'repairing') {
+              checksum.checked = phase.checked
+              checksum.toCheck = phase.toCheck
+            }
+            this.scheduleUpdate(runtime)
+          }
+        }
+      )
+      checksum.actual = result.actual
+      checksum.round = result.rounds
+      checksum.checked = undefined
+      checksum.toCheck = undefined
+      checksum.repairedBlocks = [
+        ...new Set([...(checksum.repairedBlocks ?? []), ...result.repairedBlocks])
+      ]
+      checksum.bytesRefetched = (checksum.bytesRefetched ?? 0) + result.bytesRefetched
+      checksum.bytesRewritten = (checksum.bytesRewritten ?? 0) + result.bytesRewritten
+      checksum.badNetworks = [...new Set([...(checksum.badNetworks ?? []), ...result.badNetworks])]
+      if (process.env['PLEXO_DEBUG']) console.debug('[plexo] checksum', result)
+      if (result.verified) {
+        checksum.status = 'verified'
+        if (result.rounds > 0) await runtime.file.sync()
+        return true
+      }
+      checksum.status = 'failed'
+      runtime.state.status = 'error'
+      runtime.state.resumable = true
+      runtime.state.error =
+        result.rounds === 0
+          ? `Checksum mismatch (${algorithm.toUpperCase()}), and the server can't send parts of the file to repair it. Retry, publish it unverified, or remove it.`
+          : `Checksum still wrong after ${result.rounds} repair round${result.rounds === 1 ? '' : 's'} (${algorithm.toUpperCase()}). Retry, publish it unverified, or remove it.`
+      this.notify('Checksum mismatch', `${runtime.state.fileName}: ${runtime.state.error}`)
+      return false
+    } catch (error) {
+      checksum.status = 'failed'
+      runtime.state.status = 'error'
+      runtime.state.resumable = true
+      runtime.state.error = `Checksum check could not finish: ${error instanceof Error ? error.message : String(error)}`
+      return false
+    } finally {
+      for (const connection of connections.values()) connection.close()
+    }
+  }
+
+  /**
+   * Enhancement 5: the networks to re-fetch blocks over, best first. The learning store's
+   * per-network throughput for this host leads; a network it knows nothing of is ranked by what
+   * it delivered in this run, fewer retries breaking ties.
+   */
+  private rankNetworksForRepair(runtime: HttpDownloadRuntime, networkIds: string[]): string[] {
+    let host = ''
+    try {
+      host = targetHost(new URL(runtime.requestPayload.url))
+    } catch {
+      // Unparseable URL: rank by this run alone.
+    }
+    const score = (networkId: string): [number, number, number] => {
+      const learned = this.learning.peekNetwork(`${host}|${networkId}`)
+      const network = runtime.state.networks.find((entry) => entry.id === networkId)
+      return [
+        learned && learned.downloads > 0 ? learned.ewmaThroughput : 0,
+        network?.bytesDownloaded ?? 0,
+        -(network?.retries ?? 0)
+      ]
+    }
+    return [...networkIds].sort((a, b) => {
+      const [x, y] = [score(a), score(b)]
+      for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return y[i] - x[i]
+      return 0
+    })
+  }
+
+  /** Enhancement 5: the user's way out of a failed check: publish the file as it is. */
+  async skipChecksum(id: string): Promise<void> {
+    const runtime = this.runtimes.get(id)
+    if (!runtime || runtime.kind !== 'http' || !runtime.state.checksum) return
+    runtime.state.checksum.status = 'skipped'
+    this.pushUpdate(runtime)
+    await this.persistNow(runtime)
+    if (runtime.state.status === 'error') this.resume(id)
   }
 
   /**

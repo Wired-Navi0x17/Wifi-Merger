@@ -17,6 +17,7 @@ import {
   type Action,
   type Snapshot
 } from './concurrency'
+import { RttEstimator } from './rttEstimator'
 import { downloadChunk, fetchRange, HttpStatusError, RemoteChangedError } from './chunkDownloader'
 import { compareVersion, type FileVersion } from './fileVersion'
 import { interleave, MAX_STREAMS_PER_NETWORK, startingStreams } from './plan'
@@ -176,8 +177,12 @@ function concurrencyFor(
   if (!splittable(request) || testStreamsPerNetwork() !== null) return null
   const picked = pickedStreams(request)
   return picked === undefined
-    ? new ConcurrencyController(MAX_STREAMS_PER_NETWORK, true, (networkId) =>
-        Math.floor(MAX_STREAMS_PER_NETWORK / Math.max(1, host.downloadsOn(networkId)))
+    ? new ConcurrencyController(
+        MAX_STREAMS_PER_NETWORK,
+        true,
+        (networkId) =>
+          Math.floor(MAX_STREAMS_PER_NETWORK / Math.max(1, host.downloadsOn(networkId))),
+        () => host.congestionMode?.() ?? 'throughput'
       )
     : new ConcurrencyController(picked, false)
 }
@@ -313,6 +318,8 @@ export class HttpTransfer implements Transfer {
   private concurrency: ConcurrencyController | null
   /** Whether the disk is what holds the download back, for Auto, the user and hedges. */
   private readonly disk = new DiskWatch()
+  /** Feature 6: each network's minRTT, sRTT and bottleneck rate (see rttEstimator.ts). */
+  private readonly paths = new RttEstimator()
   /** Per-download scheduler policy: the learner may tighten or loosen hedge timing. */
   private get policy(): SchedulerPolicy {
     const suggested = this.host.suggestTail?.()
@@ -740,7 +747,10 @@ export class HttpTransfer implements Transfer {
           this.runtime.file.writer(block.rangeStart + (attempt.startOffset ?? 0)),
         signal: AbortSignal.any([self.controller.signal, attempt.abort.signal]),
         acceptedVersions: this.acceptedVersions,
-        onResponse: (info) => (attempt.response = info),
+        onResponse: (info) => {
+          attempt.response = info
+          this.paths.response(attempt.networkId, Date.now(), info.ttfbMs, info.reusedSocket)
+        },
         throttle: (bytes) => this.host.limits.take(attempt.networkId, bytes),
         onWriteWait: (waiting) => (attempt.writeWaiting = waiting),
         onNetworkProgress: (bytesThisRun) => {
@@ -1041,7 +1051,22 @@ export class HttpTransfer implements Transfer {
     const inUse = this.runtime.state.networks.filter((network) => network.status === 'on')
     let writing = 0
     let held = 0
-    const networks = inUse.map(({ id }) => {
+    const networks = inUse.map((network) => {
+      const { id } = network
+      // Feature 6: the path, measured once a tick, and shown on the network's row.
+      this.paths.delivered(id, now, this.trafficOf(id).received)
+      const estimate = this.paths.estimate(id)
+      if (network.transfer === 'http') {
+        network.path = estimate
+          ? {
+              minRttMs: Math.round(estimate.minRttMs),
+              srttMs: Math.round(estimate.srttMs),
+              queueDelayMs: Math.round(estimate.queueDelayMs),
+              bdpBytes: estimate.bdpBytes,
+              phase: this.concurrency?.delayState(id)
+            }
+          : undefined
+      }
       let streams = 0
       let answered = 0
       let refused = 0
@@ -1055,7 +1080,14 @@ export class HttpTransfer implements Transfer {
         if (self?.attempt) writing++
         if (self?.attempt?.writeWaiting) held++
       }
-      return { id, streams, answered, refused, served }
+      const path = estimate
+        ? {
+            minRttMs: estimate.minRttMs,
+            queueDelayMs: estimate.queueDelayMs,
+            rateBps: estimate.rateBps
+          }
+        : undefined
+      return { id, streams, answered, refused, served, path }
     })
     this.noteDisk(now, writing, held)
     // A new stream takes a waiting block the moment it starts.

@@ -1,3 +1,5 @@
+import type { CongestionMode } from '../../shared/types'
+
 // How many streams each network runs. Deliberately simple, after Gopeed and aria2: no timers and
 // no speed comparisons, so noise on a flaky network can't move it.
 //
@@ -37,6 +39,20 @@
 // - Otherwise each network is decided on its own, so one that drops out or comes back never
 //   disturbs the others.
 //
+// - Feature 6, friendly mode (the default; see rttEstimator.ts): the rules above are loss-based,
+//   like TCP Reno: they grow until a server refuses. On a home link the router's queue fills
+//   long before that, and ping for everyone on it climbs (bufferbloat). So once a network's path
+//   has been measured, it also listens to delay, like BBR:
+//     queue delay ≥ max(minRTT, QUEUE_FLOOR_MS)       no growth: the pipe is full, more only queues
+//     queue delay > max(2 × minRTT, BLOAT_FLOOR_MS)   cut to ⌈streams × 3/4⌉ (multiplicative
+//                                                     decrease), at most once per DRAIN_MS
+//     a growth that didn't raise the rate ≥ 10%      no growth for RECOVER_MS (the plateau)
+//   A queue only builds when data arrives faster than the bottleneck sends it, so a growing queue
+//   already says the rate can't rise. Growth doubles (slow start) until the first cut or plateau,
+//   then adds one stream at a time (congestion avoidance). A cut is held like a server's ceiling,
+//   and rises one stream per RECOVER_MS, which probes for more bandwidth the way BBR's ProbeBW
+//   does. Off (throughput mode), or before the path has enough samples, nothing changes.
+//
 // No I/O and no clock of its own: it reads a snapshot, time included, and says what to do, so
 // every rule can be checked against exact situations.
 
@@ -51,6 +67,16 @@ export const DISK_RECOVER_MS = 10_000
 /** No write landed for this long: the disk has stopped rather than slowed down. A working hard drive
  * lands a writer's worth (512 KiB) in tens of ms. */
 export const DISK_STALLED_MS = 500
+/** Feature 6: queueing delay below this is jitter (server think time, Wi-Fi airtime), not a queue.
+ * On a LAN minRTT is a few ms, and 2 × minRTT alone would read every hiccup as bloat. */
+export const QUEUE_FLOOR_MS = 15
+export const BLOAT_FLOOR_MS = 30
+/** Between two cuts: long enough for sRTT (gain 1/8) to show what the last one did. */
+export const DRAIN_MS = 5_000
+/** How long after a growth its effect on the rate is judged. */
+export const GROWTH_JUDGE_MS = 3_000
+/** A growth that raised the rate less than this didn't help: the pipe was already full. */
+export const GROWTH_GAIN = 1.1
 
 export interface NetworkSnapshot {
   id: string
@@ -62,6 +88,14 @@ export interface NetworkSnapshot {
   refused: number
   /** Its streams that received data since the last snapshot. */
   served: number
+  /** Feature 6: its path as rttEstimator.ts measures it; absent until it has enough samples. */
+  path?: PathView
+}
+
+export interface PathView {
+  minRttMs: number
+  queueDelayMs: number
+  rateBps: number
 }
 
 /** What DiskWatch reads, and since when without a break. */
@@ -135,6 +169,17 @@ export class ConcurrencyController {
   /** The most streams any network may run while the disk can't keep up (null: no cap), and from
    * when what the disk does counts toward moving it: when it last moved, or last ran below it. */
   private disk = { cap: null as number | null, from: 0 }
+  /** Feature 6, by network: when it was last cut for bloat, a growth waiting to be judged, until
+   * when growth is off after one that didn't help, and whether it is past slow start. */
+  private readonly delay = new Map<
+    string,
+    {
+      cutAt: number
+      growth?: { at: number; rateBefore: number }
+      plateauUntil: number
+      avoid: boolean
+    }
+  >()
 
   constructor(
     /** The most streams a network may run. */
@@ -142,8 +187,59 @@ export class ConcurrencyController {
     /** false: keep each network at maxPerNetwork (the user's pick) rather than doubling to it. */
     private readonly grows = true,
     /** The most a network may run for this download's share of it now (see the rules above). */
-    private readonly share: (networkId: string) => number = () => Infinity
+    private readonly share: (networkId: string) => number = () => Infinity,
+    /** Feature 6: read every tick, so the setting applies to a download already running. */
+    private readonly mode: () => CongestionMode = () => 'throughput'
   ) {}
+
+  /** Feature 6: the delay rules (see above) for one network. Returns 'cut' with the new ceiling
+   * already set, 'hold' when it mustn't grow now, or 'grow' with how many it may add at most. */
+  private judgeDelay(
+    network: NetworkSnapshot,
+    now: number
+  ): { kind: 'cut' } | { kind: 'hold' } | { kind: 'grow'; most: number } {
+    const { id, streams, path } = network
+    const slowStart = { kind: 'grow' as const, most: streams }
+    if (!this.grows || this.mode() !== 'friendly' || !path) return slowStart
+    let entry = this.delay.get(id)
+    if (!entry) {
+      entry = { cutAt: -Infinity, plateauUntil: -Infinity, avoid: false }
+      this.delay.set(id, entry)
+    }
+    if (entry.growth && now - entry.growth.at >= GROWTH_JUDGE_MS) {
+      if (path.rateBps < entry.growth.rateBefore * GROWTH_GAIN) {
+        entry.plateauUntil = now + RECOVER_MS
+        entry.avoid = true
+      }
+      entry.growth = undefined
+    }
+    const bloated = path.queueDelayMs > Math.max(2 * path.minRttMs, BLOAT_FLOOR_MS)
+    if (bloated && streams > 1 && now - entry.cutAt >= DRAIN_MS) {
+      const limit = Math.max(1, Math.ceil(streams * 0.75))
+      const held = this.ceilings.get(id)
+      this.ceilings.set(id, { limit: Math.min(limit, held?.limit ?? Infinity), since: now })
+      entry.cutAt = now
+      entry.avoid = true
+      entry.growth = undefined
+      return { kind: 'cut' }
+    }
+    if (path.queueDelayMs >= Math.max(path.minRttMs, QUEUE_FLOOR_MS)) return { kind: 'hold' }
+    if (entry.growth || now < entry.plateauUntil) return { kind: 'hold' }
+    return { kind: 'grow', most: entry.avoid ? 1 : streams }
+  }
+
+  /** Feature 6: a growth just happened on `networkId`; its effect is judged GROWTH_JUDGE_MS on. */
+  private grew(network: NetworkSnapshot, now: number): void {
+    const entry = this.delay.get(network.id)
+    if (entry && network.path) entry.growth = { at: now, rateBefore: network.path.rateBps }
+  }
+
+  /** Feature 6: what the delay rules found, for the UI. */
+  delayState(networkId: string): 'slow-start' | 'avoidance' | undefined {
+    const entry = this.delay.get(networkId)
+    if (!entry || this.mode() !== 'friendly') return undefined
+    return entry.avoid ? 'avoidance' : 'slow-start'
+  }
 
   tick(snapshot: Snapshot): Action[] {
     const actions: Action[] = []
@@ -163,6 +259,7 @@ export class ConcurrencyController {
         entry.since = now
         if (entry.limit >= this.maxPerNetwork) this.ceilings.delete(id)
       }
+      const delay = this.judgeDelay(network, now)
       const ceiling = this.limit(id)
       if (streams > ceiling) {
         actions.push({ kind: 'retire', networkId: id, count: streams - ceiling })
@@ -170,9 +267,11 @@ export class ConcurrencyController {
       }
       // Not while the server is turning requests away, or the disk isn't keeping up.
       if (network.refused > 0 || diskHolds || streams === 0 || network.answered < streams) continue
-      const count = Math.min(this.grows ? streams : Infinity, ceiling - streams, spare)
+      if (delay.kind !== 'grow') continue
+      const count = Math.min(this.grows ? delay.most : Infinity, ceiling - streams, spare)
       if (count < 1) continue
       spare -= count
+      this.grew(network, now)
       actions.push({ kind: 'add', networkId: id, count })
     }
     return actions

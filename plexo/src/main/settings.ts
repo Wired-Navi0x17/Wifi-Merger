@@ -108,6 +108,7 @@ function sanitizeSettings(parsed: unknown): AppSettings {
     const organized = sanitizeAutoOrganize(parsed.autoOrganize)
     if (organized) settings.autoOrganize = organized
   }
+  if (parsed.congestionMode === 'throughput') settings.congestionMode = 'throughput'
   if (typeof parsed.speedTestUrl === 'string') {
     const url = sanitizeSpeedTestUrl(parsed.speedTestUrl)
     if (url) settings.speedTestUrl = url

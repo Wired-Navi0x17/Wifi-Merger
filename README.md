@@ -30,6 +30,13 @@
 4. **UI Refinements & Window Material Support (`src/main/windowMaterial.ts`, `MaterialToggle.tsx`)**
    - Native backdrop vibrancy/blur toggle, upgraded dialog interfaces for speed testing, network learning analytics, and auto-organize controls.
 
+5. **Checksum Verification & Intelligent Chunk Repair (`plexo-feature-docs/feature-05-checksum-verification.html`)**
+   - End-to-end payload integrity verification (MD5, SHA-1, SHA-256) with targeted re-download of corrupted byte ranges using bandit-ranked network paths.
+
+6. **Bufferbloat Control: delay-based stream sizing (`src/main/download/rttEstimator.ts`, `concurrency.ts`)**
+   - Measures each network's minRTT, smoothed RTT (RFC 6298) and bottleneck bandwidth from reused-socket round trips, BBR-style, and computes the bandwidth-delay product (BDP = BtlBw × minRTT).
+   - Stops adding streams once queueing delay (sRTT − minRTT) reaches minRTT, and cuts streams to 3/4 when it passes 2 × minRTT. That keeps the pipe full without filling the router's queue, so ping stays low for everyone else on the network. Toggle: *Network learning → Keep ping low while downloading*. Tests: `scripts/verify-congestion.test.mts`.
+
 ---
 
 ## 📁 Repository Structure
@@ -46,7 +53,8 @@
 ├── plexo-feature-docs/      # HTML visual feature documentation and specifications
 │   ├── feature-01-auto-organize.html
 │   ├── feature-02-network-learning.html
-│   └── feature-03-04-ui-plan.html
+│   ├── feature-03-04-ui-plan.html
+│   └── feature-05-checksum-verification.html
 ├── plexo-whitepaper/        # Standalone interactive whitepaper and presentation site
 │   ├── index.html
 │   ├── app.js

@@ -111,6 +111,35 @@ export interface TorrentPeerState {
 }
 
 export type HttpBlockStatus = 'pending' | 'downloading' | 'completed'
+
+/** Enhancement 5: the digests a checksum can be given in. */
+export type ChecksumAlgorithm = 'md5' | 'sha1' | 'sha256'
+
+export interface ExpectedChecksum {
+  algorithm: ChecksumAlgorithm
+  /** Lower-case hex. */
+  value: string
+  /** Where it came from: typed by the user, or published with an indexed item. */
+  source: 'user' | 'page'
+}
+
+/** Enhancement 5: where a download's checksum check stands. */
+export interface ChecksumState extends ExpectedChecksum {
+  status: 'pending' | 'verifying' | 'repairing' | 'verified' | 'failed' | 'skipped'
+  /** The file's digest as last computed. */
+  actual?: string
+  /** Repair round under way or last run (1..3); 0 for the first check. */
+  round?: number
+  /** While repairing: blocks checked of those to check this round. */
+  checked?: number
+  toCheck?: number
+  /** Over every round: blocks found bad and rewritten, bytes fetched to check and rewrite them. */
+  repairedBlocks?: number[]
+  bytesRefetched?: number
+  bytesRewritten?: number
+  /** Networks caught serving wrong bytes. */
+  badNetworks?: string[]
+}
 /** `skipped`: a piece that none of the files chosen for this torrent needs. */
 export type TorrentPieceStatus = HttpBlockStatus | 'skipped'
 
@@ -178,7 +207,26 @@ interface DownloadNetworkBase {
 
 export interface HttpDownloadNetwork extends DownloadNetworkBase {
   transfer: 'http'
+  /** Feature 6: the path as measured from reused-socket round trips; absent until measured. */
+  path?: PathStats
 }
+
+/** Feature 6: one network's path, BBR-style (see rttEstimator.ts). */
+export interface PathStats {
+  /** Lowest RTT lately: the delay with an empty queue. */
+  minRttMs: number
+  /** Smoothed RTT now. */
+  srttMs: number
+  /** sRTT − minRTT: time spent waiting in a queue. */
+  queueDelayMs: number
+  /** Bottleneck bandwidth × minRTT: the bytes in flight that fill the pipe. */
+  bdpBytes: number
+  /** Friendly mode only: still doubling, or past the first sign of a full pipe. */
+  phase?: 'slow-start' | 'avoidance'
+}
+
+/** Feature 6: friendly listens to ping as well as refusals; throughput only to refusals. */
+export type CongestionMode = 'friendly' | 'throughput'
 
 export interface TorrentDownloadNetwork extends DownloadNetworkBase {
   transfer: 'torrent'
@@ -234,6 +282,8 @@ export interface HttpDownloadState extends DownloadStateBase {
   /** The disk can't keep up: most streams are waiting for their writes (see concurrency.ts). */
   diskLimited?: boolean
   fromBrowser?: string
+  /** Enhancement 5: set when the download has a checksum to be verified against. */
+  checksum?: ChecksumState
 }
 
 export interface TorrentDownloadState extends DownloadStateBase {
@@ -407,6 +457,8 @@ export interface AppSettings {
   learning?: { tailAdaptive?: boolean }
   /** Feature 4: where the speed test reads from. Missing means the built-in public endpoint. */
   speedTestUrl?: string
+  /** Feature 6: only ever saved as 'throughput'; missing means friendly. */
+  congestionMode?: CongestionMode
 }
 
 /** bytes: MB/s. bits: Mbps, as internet plans and speed tests count them. */
@@ -445,6 +497,8 @@ export interface InitialState {
   learningTailAdaptive: boolean
   /** Feature 4: where the speed test reads from; shown in its dialog and editable there. */
   speedTestUrl: string
+  /** Feature 6: bufferbloat control. */
+  congestionMode: CongestionMode
 }
 
 interface StartDownloadRequestBase {
@@ -467,6 +521,8 @@ export interface StartHttpDownloadRequest extends StartDownloadRequestBase {
   /** Streams per network the user picked; left out, the count is decided automatically. */
   streamsPerNetwork?: number
   browser?: BrowserContext
+  /** Enhancement 5: verify the finished file against this digest, repairing bad blocks. */
+  checksum?: ExpectedChecksum
 }
 
 /** The fields of chrome.cookies.Cookie that decide where it's sent. */

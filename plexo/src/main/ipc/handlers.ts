@@ -37,6 +37,7 @@ import { NetworkMonitor } from '../network/interfaces'
 import { loadSettings, saveSettings } from '../settings'
 import { showUpdateMenu, updateState } from '../updater'
 import { applyWindowMaterial } from '../windowMaterial'
+import { SourceIndexManager } from '../discovery/sourceIndex'
 
 async function openNetworkSettings(): Promise<void> {
   if (process.platform === 'win32') {
@@ -155,7 +156,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
           categories: structuredClone(DEFAULT_ORGANIZE_CATEGORIES)
         },
         learningTailAdaptive: settings.learning?.tailAdaptive === true,
-        speedTestUrl: settings.speedTestUrl ?? DEFAULT_SPEED_TEST_URL
+        speedTestUrl: settings.speedTestUrl ?? DEFAULT_SPEED_TEST_URL,
+        congestionMode: settings.congestionMode ?? 'friendly'
       } satisfies InitialState
     } catch (error) {
       console.error('[plexo] failed to read initial state', error)
@@ -172,7 +174,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         speedUnit: 'bytes',
         autoOrganize: { enabled: true, categories: structuredClone(DEFAULT_ORGANIZE_CATEGORIES) },
         learningTailAdaptive: false,
-        speedTestUrl: DEFAULT_SPEED_TEST_URL
+        speedTestUrl: DEFAULT_SPEED_TEST_URL,
+        congestionMode: 'friendly'
       } satisfies InitialState
     }
   })
@@ -277,6 +280,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     manager.resume(id)
   })
 
+  handle('skipChecksum', async (_event, id) => manager.skipChecksum(id))
+
   handle('relinkDownload', async (_event, id, url) => manager.relink(id, url))
 
   handle('setDownloadNetwork', async (_event, id, networkId, enabled) => {
@@ -331,6 +336,30 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   // Feature 2: the Learning dialog's "Forget learned data" button.
   handle('resetLearning', async () => {
     await manager.resetLearning()
+  })
+
+  // Unified Source Index & In-App Discovery
+  const sourceIndex = new SourceIndexManager()
+  handle('sourcesList', async () => sourceIndex.listSources())
+  handle('sourcesAdd', async (_event, url, name, forcedType) =>
+    sourceIndex.addSource(url, name, forcedType)
+  )
+  handle('sourcesRemove', async (_event, id) => sourceIndex.removeSource(id))
+  handle('sourcesToggle', async (_event, id, enabled) => sourceIndex.toggleSource(id, enabled))
+  handle('sourcesSync', async (_event, id) => sourceIndex.syncSource(id))
+  handle('contentSearch', async (_event, query) => sourceIndex.search(query))
+  handle('contentDiscover', async () => sourceIndex.discover())
+  handle('contentResolve', async (_event, item) => sourceIndex.resolveDownload(item))
+  handle('openExternalUrl', async (_event, rawUrl) => {
+    if (!rawUrl || typeof rawUrl !== 'string') return
+    try {
+      const u = new URL(rawUrl)
+      if (['http:', 'https:'].includes(u.protocol)) {
+        await shell.openExternal(rawUrl)
+      }
+    } catch {
+      // Ignore invalid URLs
+    }
   })
 
   handle('updateState', () => updateState())

@@ -70,6 +70,11 @@ export class LearningStore {
     return profile
   }
 
+  /** A network's profile if one was ever learned; unlike network(), never creates one. */
+  peekNetwork(key: string): NetworkLearnProfile | undefined {
+    return this.networks.get(key)
+  }
+
   beliefsFor(context: string): ArmBelief[] {
     let beliefs = this.beliefs.get(context)
     if (!beliefs) this.beliefs.set(context, (beliefs = freshBeliefs()))

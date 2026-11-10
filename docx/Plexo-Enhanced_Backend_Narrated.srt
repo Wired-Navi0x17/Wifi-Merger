@@ -1,0 +1,75 @@
+1
+00:00:00,000 --> 00:00:10,150
+This is Plexo-Enhanced. It downloads one file over every network a laptop has, at the same time, and it does all of it at layer seven.
+
+2
+00:00:10,150 --> 00:00:17,875
+Let us walk through the whole backend, from the moment you paste a link to the moment the finished file appears on disk.
+
+3
+00:00:17,875 --> 00:00:27,450
+Plexo is an Electron app with two halves. The React window draws the interface, but it has no network or disk access of its own.
+
+4
+00:00:27,450 --> 00:00:36,175
+It talks to the main process through thirty-eight typed IPC channels, and the main process checks every argument it receives.
+
+5
+00:00:36,175 --> 00:00:47,325
+Inside the main process live the network monitor, the download manager, the scheduler, the torrent engine, the browser bridge, and our new discovery indexer.
+
+6
+00:00:47,325 --> 00:00:58,425
+Every second, the network monitor reads the operating system's interfaces, so it knows when Wi-Fi, Ethernet, or a phone tether appears or disappears.
+
+7
+00:00:58,425 --> 00:01:10,125
+Each network gets its own TCP sockets. On Linux, Plexo pins them to one device with the bind-to-device socket option, and it sets the source address too.
+
+8
+00:01:10,125 --> 00:01:21,200
+A download starts with a probe, a request for the first kilobyte. Only a real two-oh-six Partial Content reply proves that the server can split the file.
+
+9
+00:01:21,200 --> 00:01:33,575
+Then the planner cuts the file into blocks. Two networks, thirty-two streams each, two blocks per stream. A three hundred megabyte file becomes one hundred and twenty-eight blocks.
+
+10
+00:01:33,575 --> 00:01:42,750
+Free streams pull the next waiting block, so the faster network simply asks more often. No speed ratio is ever configured.
+
+11
+00:01:42,750 --> 00:01:56,025
+Every reply is checked, its content range, size and E-tag, then written straight to its own offset in one staging file. At the end, a single rename publishes it, with no copy.
+
+12
+00:01:56,025 --> 00:02:06,775
+When only slow blocks remain, an idle stream races a second copy from the same frontier, and progress counts the furthest byte, never the sum.
+
+13
+00:02:06,775 --> 00:02:16,975
+Speed limits use a token bucket. When it empties, Plexo stops reading, TCP's receive window closes, and the sender simply waits.
+
+14
+00:02:16,975 --> 00:02:26,525
+If a network vanishes, its blocks go back to the queue with their progress kept, and another network resumes them with a fresh range request.
+
+15
+00:02:26,525 --> 00:02:37,250
+On top of this base, we added seven features. Link indexing crawls a pasted page, blocks private addresses, and builds a searchable catalogue.
+
+16
+00:02:37,250 --> 00:02:50,575
+A Thompson sampling learner tunes streams and hedging for each host. A speed test measures every path. A simulation predicts the time, the split, and the disk space before you start.
+
+17
+00:02:50,575 --> 00:03:00,250
+Auto-organize files each download by its type, the window became translucent, and checksum repair is designed for the next version.
+
+18
+00:03:00,250 --> 00:03:12,925
+On our test bench, Plexo reached seventy-three point one megabytes per second over two paths, one point six times Wi-Fi alone, with the bytes split in proportion to capacity.
+
+19
+00:03:12,925 --> 00:03:18,800
+One file, many networks, and every byte counted once. That is Plexo-Enhanced.

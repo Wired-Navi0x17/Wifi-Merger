@@ -22,6 +22,7 @@ export const IpcChannels = {
   chooseTorrentFiles: 'download:choose-torrent-files',
   pauseDownload: 'download:pause',
   resumeDownload: 'download:resume',
+  skipChecksum: 'download:skip-checksum',
   relinkDownload: 'download:relink',
   setDownloadNetwork: 'download:set-network',
   cancelDownload: 'download:cancel',
@@ -40,5 +41,14 @@ export const IpcChannels = {
   resetLearning: 'learning:reset',
   startSpeedTest: 'speedtest:start',
   cancelSpeedTest: 'speedtest:cancel',
-  speedTestProgress: 'speedtest:progress'
+  speedTestProgress: 'speedtest:progress',
+  sourcesList: 'sources:list',
+  sourcesAdd: 'sources:add',
+  sourcesRemove: 'sources:remove',
+  sourcesToggle: 'sources:toggle',
+  sourcesSync: 'sources:sync',
+  contentSearch: 'content:search',
+  contentDiscover: 'content:discover',
+  contentResolve: 'content:resolve',
+  openExternalUrl: 'shell:open-external-url'
 } as const

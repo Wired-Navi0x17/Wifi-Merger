@@ -9,6 +9,7 @@ import type {
   TorrentDownloadState,
   TorrentPieceState
 } from '../../shared/types'
+import type { CongestionMode } from '../../shared/types'
 import type { NetworkMonitor } from '../network/interfaces'
 import type { Limits } from '../network/limits'
 import type { DownloadFile } from './downloadFile'
@@ -80,6 +81,8 @@ export interface TransferHost {
   limits: Limits
   /** Adaptive tail suggestion for this download, if the learner is acting. */
   suggestTail?: () => TailSuggestion | null
+  /** Feature 6: whether Auto also listens to delay (see concurrency.ts). Absent: throughput. */
+  congestionMode?: () => CongestionMode
   /** Running downloads on Auto that have `networkId` on, this one included: how many share its
    * streams (see concurrency.ts). */
   downloadsOn(networkId: string): number

@@ -1,4 +1,5 @@
 import type { DownloadState, FinishedDownload } from '@shared/types'
+import { ChecksumPanel } from '../components/ChecksumPanel'
 import { HeroBand } from '../components/HeroBand'
 import { DetailHeader } from '../components/DetailHeader'
 import { ThroughputChart } from '../components/ThroughputChart'
@@ -136,6 +137,18 @@ export function CompleteScreen({
           </div>
         ))}
       </div>
+
+      {download.kind === 'http' && download.checksum && (
+        <div className="mx-5 mb-4">
+          <ChecksumPanel
+            checksum={download.checksum}
+            networkName={(id) => {
+              const network = download.networks.find((entry) => entry.id === id)
+              return network ? networkVisual(network.id, network.kind, network.label).name : id
+            }}
+          />
+        </div>
+      )}
 
       <div className="mx-5 mb-4 flex flex-col gap-2">
         <h2 className={sectionHeaderClass}>Speed over the download</h2>

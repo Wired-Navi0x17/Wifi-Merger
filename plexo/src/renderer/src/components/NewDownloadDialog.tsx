@@ -1,4 +1,5 @@
 import type { ProbeResult } from '@shared/types'
+import { detectAlgorithm, normalizeChecksum } from '@shared/checksum'
 import { cn } from 'cn'
 import {
   AlertTriangle,
@@ -112,6 +113,10 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   const [skippedFiles, setSkippedFiles] = useState<number[]>([])
   // For this download only: the next one starts on Auto again.
   const [streamsChoice, setStreamsChoice] = useState<StreamsChoice>('auto')
+  // Enhancement 5: an optional digest to verify the finished file against.
+  const [checksumText, setChecksumText] = useState('')
+  const checksumAlgorithm = detectAlgorithm(checksumText)
+  const checksumInvalid = checksumText.trim() !== '' && checksumAlgorithm === null
   // Feature 1: per-download organize override. Null follows the global setting.
   const globalOrganize = useAppStore((store) => store.autoOrganize.enabled)
   const [organizeOverride, setOrganizeOverride] = useState<boolean | null>(null)
@@ -233,7 +238,8 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
     (!torrent || chosenFiles.length > 0) &&
     selectedInterfaceIds.length > 0 &&
     Boolean(destinationDir) &&
-    !starting
+    !starting &&
+    !checksumInvalid
   const startLabel = starting
     ? 'Starting'
     : probe.status === 'probing'
@@ -338,7 +344,14 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
           : {
               ...common,
               kind: 'http',
-              streamsPerNetwork: streamsChoice === 'auto' ? undefined : streamsChoice
+              streamsPerNetwork: streamsChoice === 'auto' ? undefined : streamsChoice,
+              ...(checksumAlgorithm && {
+                checksum: {
+                  algorithm: checksumAlgorithm,
+                  value: normalizeChecksum(checksumAlgorithm, checksumText)!,
+                  source: 'user' as const
+                }
+              })
             },
         linkId
       )
@@ -661,6 +674,35 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
                 ))}
               </ToggleGroup>
               <div className="font-mono text-[11px] text-muted-foreground">per network</div>
+            </div>
+          )}
+
+          {ready && !torrent && (
+            <div className="flex items-center gap-3">
+              <label className={labelClass} htmlFor="new-download-checksum">
+                Checksum
+              </label>
+              <input
+                id="new-download-checksum"
+                type="text"
+                spellCheck={false}
+                autoComplete="off"
+                placeholder="Optional: paste an MD5, SHA-1 or SHA-256"
+                value={checksumText}
+                onChange={(event) => setChecksumText(event.target.value)}
+                aria-invalid={checksumInvalid || undefined}
+                className={cn(
+                  'h-7 min-w-0 flex-1 rounded-none border border-border bg-transparent px-2 font-mono text-[11.5px] outline-none focus:border-[var(--text-secondary)]',
+                  checksumInvalid && 'border-[var(--color-danger)]'
+                )}
+              />
+              <div className="w-14 font-mono text-[11px] text-muted-foreground">
+                {checksumAlgorithm
+                  ? checksumAlgorithm.toUpperCase()
+                  : checksumInvalid
+                    ? 'invalid'
+                    : ''}
+              </div>
             </div>
           )}
 
